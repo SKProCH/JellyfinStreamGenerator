@@ -114,7 +114,7 @@ var showStreamGeneratorPopup = function(itemId, serverId) {
         html += '</select></label>';
 
         html += '<label style="display: flex; align-items: center; margin-bottom: 15px; cursor: pointer;">';
-        html += '<input type="checkbox" id="copyTimestamps" style="margin-right: 8px;" />';
+        html += '<input type="checkbox" id="copyTimestamps" style="margin-right: 8px;" checked />';
         html += '<span>Copy Timestamps</span>';
         html += '</label>';
 
