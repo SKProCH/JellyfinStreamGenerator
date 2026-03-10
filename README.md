@@ -23,4 +23,4 @@ This plugin for Jellyfin adds a "Generate Stream URL" option to the context menu
 ```bash
 dotnet build
 ```
-The compiled library will be available at `bin/Debug/net10.0/Jellyfin.Plugin.StreamGenerator.dll`
+The compiled library will be available at `bin/Debug/net9.0/Jellyfin.Plugin.StreamGenerator.dll`
