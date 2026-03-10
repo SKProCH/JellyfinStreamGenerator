@@ -62,22 +62,23 @@ var showStreamGeneratorPopup = function(itemId, serverId) {
 
         const selectStyle = 'width: 100%; padding: 8px; margin-top: 5px; margin-bottom: 15px; background: #333; color: #fff; border: 1px solid #444; border-radius: 4px; box-sizing: border-box;';
 
-        html += '<label>Video Codec<br>';
-        html += '<select id="videoCodec" style="' + selectStyle + '">';
-        html += '<option value="copy" selected>Copy (Direct Stream)</option>';
-        html += '<option value="h264">H264</option>';
-        html += '<option value="hevc">HEVC (H265)</option>';
-        html += '<option value="av1">AV1</option>';
-        html += '</select></label>';
+        const checkboxContainerStyle = 'display: flex; flex-wrap: wrap; gap: 10px; margin-top: 5px; margin-bottom: 15px; padding: 8px; background: #333; border: 1px solid #444; border-radius: 4px;';
+        const checkboxLabelStyle = 'display: flex; align-items: center; cursor: pointer;';
 
-        html += '<label>Audio Codec<br>';
-        html += '<select id="audioCodec" style="' + selectStyle + '">';
-        html += '<option value="copy" selected>Copy (Direct Stream)</option>';
-        html += '<option value="aac">AAC</option>';
-        html += '<option value="ac3">AC3</option>';
-        html += '<option value="eac3">EAC3</option>';
-        html += '<option value="mp3">MP3</option>';
-        html += '</select></label>';
+        html += '<label>Video Codecs</label>';
+        html += '<div style="' + checkboxContainerStyle + '">';
+        html += '<label style="' + checkboxLabelStyle + '"><input type="checkbox" name="videoCodec" value="h264" checked style="margin-right: 5px;">H264</label>';
+        html += '<label style="' + checkboxLabelStyle + '"><input type="checkbox" name="videoCodec" value="hevc" checked style="margin-right: 5px;">HEVC</label>';
+        html += '<label style="' + checkboxLabelStyle + '"><input type="checkbox" name="videoCodec" value="av1" checked style="margin-right: 5px;">AV1</label>';
+        html += '</div>';
+
+        html += '<label>Audio Codecs</label>';
+        html += '<div style="' + checkboxContainerStyle + '">';
+        html += '<label style="' + checkboxLabelStyle + '"><input type="checkbox" name="audioCodec" value="aac" checked style="margin-right: 5px;">AAC</label>';
+        html += '<label style="' + checkboxLabelStyle + '"><input type="checkbox" name="audioCodec" value="ac3" checked style="margin-right: 5px;">AC3</label>';
+        html += '<label style="' + checkboxLabelStyle + '"><input type="checkbox" name="audioCodec" value="eac3" checked style="margin-right: 5px;">EAC3</label>';
+        html += '<label style="' + checkboxLabelStyle + '"><input type="checkbox" name="audioCodec" value="mp3" checked style="margin-right: 5px;">MP3</label>';
+        html += '</div>';
 
         html += '<label>Audio Stream<br>';
         html += '<select id="audioStreamIndex" style="' + selectStyle + '">';
@@ -137,8 +138,18 @@ var showStreamGeneratorPopup = function(itemId, serverId) {
         modal.querySelector('#streamGeneratorForm').addEventListener('submit', function (e) {
             e.preventDefault();
 
-            const videoCodec = modal.querySelector('#videoCodec').value;
-            const audioCodec = modal.querySelector('#audioCodec').value;
+            const allVideoCheckboxes = Array.from(modal.querySelectorAll('input[name="videoCodec"]'));
+            const allAudioCheckboxes = Array.from(modal.querySelectorAll('input[name="audioCodec"]'));
+
+            const videoCodecCheckboxes = allVideoCheckboxes.filter(cb => cb.checked).map(cb => cb.value);
+            const audioCodecCheckboxes = allAudioCheckboxes.filter(cb => cb.checked).map(cb => cb.value);
+
+            const allVideoSelected = videoCodecCheckboxes.length === allVideoCheckboxes.length;
+            const allAudioSelected = audioCodecCheckboxes.length === allAudioCheckboxes.length;
+
+            const videoCodecsStr = videoCodecCheckboxes.join(',');
+            const audioCodecsStr = audioCodecCheckboxes.join(',');
+
             const audioStreamIndex = modal.querySelector('#audioStreamIndex').value;
             const subtitleStreamIndex = modal.querySelector('#subtitleStreamIndex').value;
             const subtitleMethod = modal.querySelector('#subtitleMethod').value;
@@ -155,20 +166,20 @@ var showStreamGeneratorPopup = function(itemId, serverId) {
                 mediaSourceId: mediaSource.Id,
                 static: false,
                 enableAutoStreamCopy: true,
-                allowVideoStreamCopy: videoCodec === 'copy',
-                allowAudioStreamCopy: audioCodec === 'copy',
+                allowVideoStreamCopy: true,
+                allowAudioStreamCopy: true,
                 copyTimestamps: copyTimestamps
             });
 
-            if (videoCodec !== 'copy') queryParams.append('videoCodec', videoCodec);
-            if (audioCodec !== 'copy') queryParams.append('audioCodec', audioCodec);
+            if (videoCodecsStr && !allVideoSelected) queryParams.append('videoCodec', videoCodecsStr);
+            if (audioCodecsStr && !allAudioSelected) queryParams.append('audioCodec', audioCodecsStr);
             if (audioStreamIndex !== '') queryParams.append('audioStreamIndex', audioStreamIndex);
             if (subtitleStreamIndex !== '') {
                 queryParams.append('subtitleStreamIndex', subtitleStreamIndex);
                 queryParams.append('subtitleMethod', subtitleMethod);
             }
 
-            const finalUrl = serverUrl + '/Videos/' + itemId + '/master.m3u8?' + queryParams.toString();
+            const finalUrl = serverUrl + '/Videos/' + itemId + '/master.m3u8?' + decodeURIComponent(queryParams.toString());
             modal.querySelector('#txtOutputUrl').value = finalUrl;
         });
 
