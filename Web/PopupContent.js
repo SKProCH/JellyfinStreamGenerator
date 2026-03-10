@@ -16,15 +16,30 @@ var showStreamGeneratorPopup = function(itemId, serverId) {
 
         if (mediaSource.MediaStreams) {
             mediaSource.MediaStreams.forEach(stream => {
+                let name = stream.DisplayTitle || stream.Title || '';
+
+                // If the name doesn't contain the language, prepend it
+                if (stream.Language && stream.Language !== 'und') {
+                    if (!name.toLowerCase().includes(stream.Language.toLowerCase())) {
+                        name = stream.Language.toUpperCase() + (name ? ' - ' + name : '');
+                    }
+                }
+
+                if (!name) {
+                    name = 'Stream ' + stream.Index;
+                }
+
+                // Append codec only if not already in the name
+                let codecStr = stream.Codec && !name.toLowerCase().includes(stream.Codec.toLowerCase()) ? (' [' + stream.Codec + ']') : '';
+
                 if (stream.Type === 'Audio') {
-                    let title = stream.Title || stream.DisplayTitle || stream.Language || ('Stream ' + stream.Index);
-                    let codecStr = stream.Codec ? (' [' + stream.Codec + ']') : '';
-                    audioOptions += '<option value="' + stream.Index + '">' + title + codecStr + '</option>';
+                    audioOptions += '<option value="' + stream.Index + '">' + name + codecStr + '</option>';
                 } else if (stream.Type === 'Subtitle') {
-                    let title = stream.Title || stream.DisplayTitle || stream.Language || ('Stream ' + stream.Index);
-                    let codecStr = stream.Codec ? (' [' + stream.Codec + ']') : '';
                     let typeStr = stream.IsExternal ? " (Ext)" : "";
-                    subtitleOptions += '<option value="' + stream.Index + '">' + title + codecStr + typeStr + '</option>';
+                    let forcedStr = stream.IsForced && !name.toLowerCase().includes('forced') ? " (Forced)" : "";
+                    let defaultStr = stream.IsDefault && !name.toLowerCase().includes('default') ? " (Default)" : "";
+
+                    subtitleOptions += '<option value="' + stream.Index + '">' + name + codecStr + typeStr + forcedStr + defaultStr + '</option>';
                 }
             });
         }
