@@ -82,17 +82,17 @@ var showStreamGeneratorPopup = function(itemId, serverId) {
 
         html += '<label>Video Codecs</label>';
         html += '<div style="' + checkboxContainerStyle + '">';
-        html += '<label style="' + checkboxLabelStyle + '"><input type="checkbox" name="videoCodec" value="h264" checked style="margin-right: 5px;">H264</label>';
-        html += '<label style="' + checkboxLabelStyle + '"><input type="checkbox" name="videoCodec" value="hevc" checked style="margin-right: 5px;">HEVC</label>';
         html += '<label style="' + checkboxLabelStyle + '"><input type="checkbox" name="videoCodec" value="av1" checked style="margin-right: 5px;">AV1</label>';
+        html += '<label style="' + checkboxLabelStyle + '"><input type="checkbox" name="videoCodec" value="hevc" checked style="margin-right: 5px;">HEVC</label>';
+        html += '<label style="' + checkboxLabelStyle + '"><input type="checkbox" name="videoCodec" value="h264" checked style="margin-right: 5px;">H264</label>';
+        html += '<label style="' + checkboxLabelStyle + '"><input type="checkbox" name="videoCodec" value="vp9" checked style="margin-right: 5px;">VP9</label>';
         html += '</div>';
 
         html += '<label>Audio Codecs</label>';
         html += '<div style="' + checkboxContainerStyle + '">';
         html += '<label style="' + checkboxLabelStyle + '"><input type="checkbox" name="audioCodec" value="aac" checked style="margin-right: 5px;">AAC</label>';
-        html += '<label style="' + checkboxLabelStyle + '"><input type="checkbox" name="audioCodec" value="ac3" checked style="margin-right: 5px;">AC3</label>';
-        html += '<label style="' + checkboxLabelStyle + '"><input type="checkbox" name="audioCodec" value="eac3" checked style="margin-right: 5px;">EAC3</label>';
-        html += '<label style="' + checkboxLabelStyle + '"><input type="checkbox" name="audioCodec" value="mp3" checked style="margin-right: 5px;">MP3</label>';
+        html += '<label style="' + checkboxLabelStyle + '"><input type="checkbox" name="audioCodec" value="opus" checked style="margin-right: 5px;">OPUS</label>';
+        html += '<label style="' + checkboxLabelStyle + '"><input type="checkbox" name="audioCodec" value="flac" checked style="margin-right: 5px;">FLAC</label>';
         html += '</div>';
 
         html += '<label>Audio Stream<br>';
@@ -159,9 +159,6 @@ var showStreamGeneratorPopup = function(itemId, serverId) {
             const videoCodecCheckboxes = allVideoCheckboxes.filter(cb => cb.checked).map(cb => cb.value);
             const audioCodecCheckboxes = allAudioCheckboxes.filter(cb => cb.checked).map(cb => cb.value);
 
-            const allVideoSelected = videoCodecCheckboxes.length === allVideoCheckboxes.length;
-            const allAudioSelected = audioCodecCheckboxes.length === allAudioCheckboxes.length;
-
             const videoCodecsStr = videoCodecCheckboxes.join(',');
             const audioCodecsStr = audioCodecCheckboxes.join(',');
 
@@ -186,8 +183,8 @@ var showStreamGeneratorPopup = function(itemId, serverId) {
                 copyTimestamps: copyTimestamps
             });
 
-            if (videoCodecsStr && !allVideoSelected) queryParams.append('videoCodec', videoCodecsStr);
-            if (audioCodecsStr && !allAudioSelected) queryParams.append('audioCodec', audioCodecsStr);
+            if (videoCodecsStr) queryParams.append('videoCodec', videoCodecsStr);
+            if (audioCodecsStr) queryParams.append('audioCodec', audioCodecsStr);
             if (audioStreamIndex !== '') queryParams.append('audioStreamIndex', audioStreamIndex);
             if (subtitleStreamIndex !== '') {
                 queryParams.append('subtitleStreamIndex', subtitleStreamIndex);
