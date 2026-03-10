@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>Jellyfin.Plugin.StreamGenerator</AssemblyName>
+    <RootNamespace>Jellyfin.Plugin.StreamGenerator</RootNamespace>
+    <!-- Plugin assembly must not end with .dll in the zip -->
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Jellyfin.Model" Version="10.9.*" />
+    <PackageReference Include="Jellyfin.Controller" Version="10.9.*" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Web\PopupContent.js" />
+  </ItemGroup>
+
+</Project>

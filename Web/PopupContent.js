@@ -1,0 +1,206 @@
+var showStreamGeneratorPopup = function(itemId, serverId) {
+    const apiClient = window.ApiClient;
+
+    /* Fetch media item to know its streams */
+    apiClient.getItem(apiClient.getCurrentUserId(), itemId).then((item) => {
+        if (!item || !item.MediaSources || item.MediaSources.length === 0) {
+            alert("Cannot get media sources for this item.");
+            return;
+        }
+
+        const mediaSource = item.MediaSources[0]; /* simplify: assume first media source */
+
+        /* Prepare Audio and Subtitle Options */
+        let audioOptions = '<option value="">Default</option>';
+        let subtitleOptions = '<option value="">None / Default</option>';
+
+        if (mediaSource.MediaStreams) {
+            mediaSource.MediaStreams.forEach(stream => {
+                if (stream.Type === 'Audio') {
+                    let title = stream.Title || stream.DisplayTitle || stream.Language || ('Stream ' + stream.Index);
+                    let codecStr = stream.Codec ? (' [' + stream.Codec + ']') : '';
+                    audioOptions += '<option value="' + stream.Index + '">' + title + codecStr + '</option>';
+                } else if (stream.Type === 'Subtitle') {
+                    let title = stream.Title || stream.DisplayTitle || stream.Language || ('Stream ' + stream.Index);
+                    let codecStr = stream.Codec ? (' [' + stream.Codec + ']') : '';
+                    let typeStr = stream.IsExternal ? " (Ext)" : "";
+                    subtitleOptions += '<option value="' + stream.Index + '">' + title + codecStr + typeStr + '</option>';
+                }
+            });
+        }
+
+        /* Create Overlay */
+        const overlay = document.createElement('div');
+        overlay.style.position = 'fixed';
+        overlay.style.top = '0';
+        overlay.style.left = '0';
+        overlay.style.width = '100%';
+        overlay.style.height = '100%';
+        overlay.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+        overlay.style.zIndex = '99999';
+        overlay.style.display = 'flex';
+        overlay.style.alignItems = 'center';
+        overlay.style.justifyContent = 'center';
+        overlay.style.fontFamily = 'sans-serif';
+
+        /* Create Modal */
+        const modal = document.createElement('div');
+        modal.style.backgroundColor = '#1e1e1e';
+        modal.style.color = '#fff';
+        modal.style.padding = '20px';
+        modal.style.borderRadius = '8px';
+        modal.style.width = '450px';
+        modal.style.maxWidth = '90%';
+        modal.style.maxHeight = '90vh';
+        modal.style.overflowY = 'auto';
+        modal.style.boxShadow = '0 4px 20px rgba(0,0,0,0.5)';
+
+        let html = '';
+        html += '<h2 style="margin-top:0; margin-bottom: 20px; font-weight: normal;">Generate Stream URL</h2>';
+
+        html += '<form id="streamGeneratorForm">';
+
+        const selectStyle = 'width: 100%; padding: 8px; margin-top: 5px; margin-bottom: 15px; background: #333; color: #fff; border: 1px solid #444; border-radius: 4px; box-sizing: border-box;';
+
+        html += '<label>Video Codec<br>';
+        html += '<select id="videoCodec" style="' + selectStyle + '">';
+        html += '<option value="copy" selected>Copy (Direct Stream)</option>';
+        html += '<option value="h264">H264</option>';
+        html += '<option value="hevc">HEVC (H265)</option>';
+        html += '<option value="av1">AV1</option>';
+        html += '</select></label>';
+
+        html += '<label>Audio Codec<br>';
+        html += '<select id="audioCodec" style="' + selectStyle + '">';
+        html += '<option value="copy" selected>Copy (Direct Stream)</option>';
+        html += '<option value="aac">AAC</option>';
+        html += '<option value="ac3">AC3</option>';
+        html += '<option value="eac3">EAC3</option>';
+        html += '<option value="mp3">MP3</option>';
+        html += '</select></label>';
+
+        html += '<label>Audio Stream<br>';
+        html += '<select id="audioStreamIndex" style="' + selectStyle + '">';
+        html += audioOptions;
+        html += '</select></label>';
+
+        html += '<label>Subtitle Stream<br>';
+        html += '<select id="subtitleStreamIndex" style="' + selectStyle + '">';
+        html += subtitleOptions;
+        html += '</select></label>';
+
+        html += '<label>Subtitle Method<br>';
+        html += '<select id="subtitleMethod" style="' + selectStyle + '">';
+        html += '<option value="Hls" selected>HLS</option>';
+        html += '<option value="Encode">Burn In (Encode)</option>';
+        html += '<option value="Embed">Embed</option>';
+        html += '<option value="Drop">Drop</option>';
+        html += '</select></label>';
+
+        html += '<label style="display: flex; align-items: center; margin-bottom: 15px; cursor: pointer;">';
+        html += '<input type="checkbox" id="copyTimestamps" style="margin-right: 8px;" />';
+        html += '<span>Copy Timestamps</span>';
+        html += '</label>';
+
+        html += '<label>Generated URL<br>';
+        html += '<textarea id="txtOutputUrl" rows="4" style="width: 100%; padding: 8px; margin-top: 5px; background: #222; color: #aaa; border: 1px solid #444; border-radius: 4px; font-family: monospace; resize: none; box-sizing: border-box;" readonly></textarea></label>';
+
+        const btnStyle = 'padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; margin-left: 10px;';
+
+        html += '<div style="display: flex; justify-content: flex-end; margin-top: 20px;">';
+        html += '<button type="button" id="btnCancel" style="' + btnStyle + ' background: #444; color: #fff;">Close</button>';
+        html += '<button type="button" id="btnCopyUrl" style="' + btnStyle + ' background: #0078d7; color: #fff;">Copy URL</button>';
+        html += '<button type="submit" style="' + btnStyle + ' background: #52b54b; color: #fff;">Generate</button>';
+        html += '</div>';
+
+        html += '</form>';
+
+        modal.innerHTML = html;
+        overlay.appendChild(modal);
+        document.body.appendChild(overlay);
+
+        /* Handle close */
+        const closePopup = function() {
+            if (document.body.contains(overlay)) {
+                document.body.removeChild(overlay);
+            }
+        };
+
+        modal.querySelector('#btnCancel').addEventListener('click', closePopup);
+
+        /* Close on overlay click */
+        overlay.addEventListener('click', function(e) {
+            if (e.target === overlay) closePopup();
+        });
+
+        /* Generate URL Logic */
+        modal.querySelector('#streamGeneratorForm').addEventListener('submit', function (e) {
+            e.preventDefault();
+
+            const videoCodec = modal.querySelector('#videoCodec').value;
+            const audioCodec = modal.querySelector('#audioCodec').value;
+            const audioStreamIndex = modal.querySelector('#audioStreamIndex').value;
+            const subtitleStreamIndex = modal.querySelector('#subtitleStreamIndex').value;
+            const subtitleMethod = modal.querySelector('#subtitleMethod').value;
+            const copyTimestamps = modal.querySelector('#copyTimestamps').checked;
+
+            const serverUrl = apiClient.serverAddress();
+            const deviceId = apiClient.deviceId();
+            const playSessionId = 'stream_generator_' + Date.now();
+
+            const queryParams = new URLSearchParams({
+                deviceId: deviceId,
+                playSessionId: playSessionId,
+                api_key: apiClient.accessToken(),
+                mediaSourceId: mediaSource.Id,
+                static: false,
+                enableAutoStreamCopy: true,
+                allowVideoStreamCopy: videoCodec === 'copy',
+                allowAudioStreamCopy: audioCodec === 'copy',
+                copyTimestamps: copyTimestamps
+            });
+
+            if (videoCodec !== 'copy') queryParams.append('videoCodec', videoCodec);
+            if (audioCodec !== 'copy') queryParams.append('audioCodec', audioCodec);
+            if (audioStreamIndex !== '') queryParams.append('audioStreamIndex', audioStreamIndex);
+            if (subtitleStreamIndex !== '') {
+                queryParams.append('subtitleStreamIndex', subtitleStreamIndex);
+                queryParams.append('subtitleMethod', subtitleMethod);
+            }
+
+            const finalUrl = serverUrl + '/Videos/' + itemId + '/master.m3u8?' + queryParams.toString();
+            modal.querySelector('#txtOutputUrl').value = finalUrl;
+        });
+
+        /* Copy logic */
+        modal.querySelector('#btnCopyUrl').addEventListener('click', function() {
+            const outputStr = modal.querySelector('#txtOutputUrl').value;
+            if (outputStr) {
+                if (navigator.clipboard && window.isSecureContext) {
+                    navigator.clipboard.writeText(outputStr).then(() => {
+                        alert("URL copied to clipboard");
+                    }).catch(err => {
+                        alert("Failed to copy: " + err);
+                    });
+                } else {
+                    const textArea = document.createElement("textarea");
+                    textArea.value = outputStr;
+                    textArea.style.position = "fixed";
+                    textArea.style.left = "-999999px";
+                    textArea.style.top = "-999999px";
+                    document.body.appendChild(textArea);
+                    textArea.focus();
+                    textArea.select();
+                    try {
+                        document.execCommand('copy');
+                        alert("URL copied to clipboard");
+                    } catch (err) {
+                        alert("Failed to copy");
+                    }
+                    textArea.remove();
+                }
+            }
+        });
+    });
+};
+window.showStreamGeneratorPopup = showStreamGeneratorPopup;
