@@ -103,9 +103,6 @@ var showStreamGeneratorPopup = function(itemId, serverId) {
         const maxBitrateMbps = Math.max(1, Math.ceil(maxBitrate / 1000000));
         const sliderMax = Math.max(140, maxBitrateMbps); // Ensure slider can reach the item's bitrate if it's > 140
 
-        html += '<label>Max Video Bitrate: <span id="bitrateDisplay">' + sliderMax + '</span> Mbps<br>';
-        html += '<input type="range" id="maxVideoBitrate" style="' + selectStyle + ' cursor: pointer;" min="1" max="' + sliderMax + '" value="' + sliderMax + '"></label>';
-
         html += '<label>Audio Stream<br>';
         html += '<select id="audioStreamIndex" style="' + selectStyle + '">';
         html += audioOptions;
@@ -124,10 +121,17 @@ var showStreamGeneratorPopup = function(itemId, serverId) {
         html += '<option value="Drop">Drop</option>';
         html += '</select></label>';
 
-        html += '<label style="display: flex; align-items: center; margin-bottom: 15px; cursor: pointer;">';
+        html += '<details style="margin-bottom: 15px; background: #333; padding: 10px; border-radius: 4px; border: 1px solid #444;">';
+        html += '<summary style="cursor: pointer; font-weight: bold; margin-bottom: 5px;">Advanced</summary>';
+
+        html += '<label style="display: block; margin-top: 10px;">Max Video Bitrate: <span id="bitrateDisplay">' + sliderMax + '</span> Mbps<br>';
+        html += '<input type="range" id="maxVideoBitrate" style="' + selectStyle + ' cursor: pointer; margin-bottom: 0;" min="1" max="' + sliderMax + '" value="' + sliderMax + '"></label>';
+
+        html += '<label style="display: flex; align-items: center; margin-top: 15px; cursor: pointer;">';
         html += '<input type="checkbox" id="copyTimestamps" style="margin-right: 8px;" checked />';
         html += '<span>Copy Timestamps</span>';
         html += '</label>';
+        html += '</details>';
 
         html += '<label>Generated URL<br>';
         html += '<textarea id="txtOutputUrl" rows="4" style="width: 100%; padding: 8px; margin-top: 5px; background: #222; color: #aaa; border: 1px solid #444; border-radius: 4px; font-family: monospace; resize: none; box-sizing: border-box;" readonly></textarea></label>';
