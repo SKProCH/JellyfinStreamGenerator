@@ -10,6 +10,11 @@ var showStreamGeneratorPopup = function(itemId, serverId) {
 
         const mediaSource = item.MediaSources[0]; /* simplify: assume first media source */
 
+        let maxBitrate = 140000000; // Default large number (140 Mbps)
+        if (mediaSource.Bitrate) {
+            maxBitrate = mediaSource.Bitrate;
+        }
+
         /* Prepare Audio and Subtitle Options */
         let audioOptions = '<option value="">Default</option>';
         let subtitleOptions = '<option value="">None / Default</option>';
@@ -95,6 +100,12 @@ var showStreamGeneratorPopup = function(itemId, serverId) {
         html += '<label style="' + checkboxLabelStyle + '"><input type="checkbox" name="audioCodec" value="flac" checked style="margin-right: 5px;">FLAC</label>';
         html += '</div>';
 
+        const maxBitrateMbps = Math.max(1, Math.ceil(maxBitrate / 1000000));
+        const sliderMax = Math.max(140, maxBitrateMbps); // Ensure slider can reach the item's bitrate if it's > 140
+
+        html += '<label>Max Video Bitrate: <span id="bitrateDisplay">' + sliderMax + '</span> Mbps<br>';
+        html += '<input type="range" id="maxVideoBitrate" style="' + selectStyle + ' cursor: pointer;" min="1" max="' + sliderMax + '" value="' + sliderMax + '"></label>';
+
         html += '<label>Audio Stream<br>';
         html += '<select id="audioStreamIndex" style="' + selectStyle + '">';
         html += audioOptions;
@@ -144,6 +155,11 @@ var showStreamGeneratorPopup = function(itemId, serverId) {
 
         modal.querySelector('#btnCancel').addEventListener('click', closePopup);
 
+        /* Handle Bitrate Slider Update */
+        modal.querySelector('#maxVideoBitrate').addEventListener('input', function(e) {
+            modal.querySelector('#bitrateDisplay').textContent = e.target.value;
+        });
+
         /* Close on overlay click */
         overlay.addEventListener('click', function(e) {
             if (e.target === overlay) closePopup();
@@ -166,6 +182,7 @@ var showStreamGeneratorPopup = function(itemId, serverId) {
             const subtitleStreamIndex = modal.querySelector('#subtitleStreamIndex').value;
             const subtitleMethod = modal.querySelector('#subtitleMethod').value;
             const copyTimestamps = modal.querySelector('#copyTimestamps').checked;
+            const maxVideoBitrate = parseInt(modal.querySelector('#maxVideoBitrate').value, 10) * 1000000;
 
             const serverUrl = apiClient.serverAddress();
             const deviceId = apiClient.deviceId();
@@ -180,7 +197,8 @@ var showStreamGeneratorPopup = function(itemId, serverId) {
                 enableAutoStreamCopy: true,
                 allowVideoStreamCopy: true,
                 allowAudioStreamCopy: true,
-                copyTimestamps: copyTimestamps
+                copyTimestamps: copyTimestamps,
+                videoBitrate: maxVideoBitrate
             });
 
             if (videoCodecsStr) queryParams.append('videoCodec', videoCodecsStr);
