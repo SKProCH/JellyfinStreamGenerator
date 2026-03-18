@@ -1,14 +1,62 @@
-var showStreamGeneratorPopup = function(itemId, serverId) {
+var showStreamGeneratorPopup = function (itemId, serverId) {
     const apiClient = window.ApiClient;
 
-    /* Fetch media item to know its streams */
-    apiClient.getItem(apiClient.getCurrentUserId(), itemId).then((item) => {
+    const getFilteredCodecs = function (sourceCodecs, supportedTranscodingCodecs, baseCodecs, fallbackCodec) {
+        const sourceCodecsLower = sourceCodecs.map(c => c.toLowerCase());
+        const supportedLower = supportedTranscodingCodecs.map(c => c.toLowerCase());
+
+        const filtered = baseCodecs.filter(c =>
+            sourceCodecsLower.includes(c) || supportedLower.includes(c)
+        );
+
+        sourceCodecsLower.forEach(c => {
+            if (!filtered.includes(c)) {
+                filtered.push(c);
+            }
+        });
+
+        if (fallbackCodec && !filtered.includes(fallbackCodec) && supportedLower.includes(fallbackCodec)) {
+            filtered.push(fallbackCodec);
+        }
+
+        filtered.sort((a, b) => {
+            if (a === fallbackCodec) return -1;
+            if (b === fallbackCodec) return 1;
+            return a.localeCompare(b);
+        });
+
+        return filtered;
+    };
+
+    const generateCodecCheckboxesHtml = function (codecs, inputName, checkboxLabelStyle) {
+        let html = '';
+        codecs.forEach(codec => {
+            const label = codec.toUpperCase();
+            html += '<label style="' + checkboxLabelStyle + '"><input type="checkbox" name="' + inputName + '" value="' + codec + '" checked style="margin-right: 5px;">' + label + '</label>';
+        });
+        return html;
+    };
+
+    /* Fetch media item and encoding options */
+    Promise.all([
+        apiClient.getItem(apiClient.getCurrentUserId(), itemId),
+        apiClient.getJSON(apiClient.getUrl('Encoding/PublicOptions')).catch(() => ({
+            TranscodingVideoCodecs: ['h264']
+        }))
+    ]).then(([item, encodingOptions]) => {
         if (!item || !item.MediaSources || item.MediaSources.length === 0) {
             alert("Cannot get media sources for this item.");
             return;
         }
 
         const mediaSource = item.MediaSources[0]; /* simplify: assume first media source */
+
+        const checkboxLabelStyle = 'display: flex; align-items: center; cursor: pointer;';
+
+        /* Filter Video Codecs */
+        const sourceVideoCodecs = (mediaSource.MediaStreams || []).filter(s => s.Type === 'Video').map(s => s.Codec).filter(Boolean);
+        const videoCodecs = getFilteredCodecs(sourceVideoCodecs, encodingOptions.TranscodingVideoCodecs || [], ['h264', 'hevc', 'av1', 'vp9'], 'h264');
+        const videoCodecsHtml = generateCodecCheckboxesHtml(videoCodecs, 'videoCodec', checkboxLabelStyle);
 
         let maxBitrate = 140000000; // Default large number (140 Mbps)
         if (mediaSource.Bitrate) {
@@ -83,14 +131,10 @@ var showStreamGeneratorPopup = function(itemId, serverId) {
         const selectStyle = 'width: 100%; padding: 8px; margin-top: 5px; margin-bottom: 15px; background: #333; color: #fff; border: 1px solid #444; border-radius: 4px; box-sizing: border-box;';
 
         const checkboxContainerStyle = 'display: flex; flex-wrap: wrap; gap: 10px; margin-top: 5px; margin-bottom: 15px; padding: 8px; background: #333; border: 1px solid #444; border-radius: 4px;';
-        const checkboxLabelStyle = 'display: flex; align-items: center; cursor: pointer;';
 
         html += '<label>Video Codecs</label>';
         html += '<div style="' + checkboxContainerStyle + '">';
-        html += '<label style="' + checkboxLabelStyle + '"><input type="checkbox" name="videoCodec" value="av1" checked style="margin-right: 5px;">AV1</label>';
-        html += '<label style="' + checkboxLabelStyle + '"><input type="checkbox" name="videoCodec" value="hevc" checked style="margin-right: 5px;">HEVC</label>';
-        html += '<label style="' + checkboxLabelStyle + '"><input type="checkbox" name="videoCodec" value="h264" checked style="margin-right: 5px;">H264</label>';
-        html += '<label style="' + checkboxLabelStyle + '"><input type="checkbox" name="videoCodec" value="vp9" checked style="margin-right: 5px;">VP9</label>';
+        html += videoCodecsHtml;
         html += '</div>';
 
         html += '<label>Audio Codecs</label>';
@@ -151,7 +195,7 @@ var showStreamGeneratorPopup = function(itemId, serverId) {
         document.body.appendChild(overlay);
 
         /* Handle close */
-        const closePopup = function() {
+        const closePopup = function () {
             if (document.body.contains(overlay)) {
                 document.body.removeChild(overlay);
             }
@@ -160,12 +204,12 @@ var showStreamGeneratorPopup = function(itemId, serverId) {
         modal.querySelector('#btnCancel').addEventListener('click', closePopup);
 
         /* Handle Bitrate Slider Update */
-        modal.querySelector('#maxVideoBitrate').addEventListener('input', function(e) {
+        modal.querySelector('#maxVideoBitrate').addEventListener('input', function (e) {
             modal.querySelector('#bitrateDisplay').textContent = e.target.value;
         });
 
         /* Close on overlay click */
-        overlay.addEventListener('click', function(e) {
+        overlay.addEventListener('click', function (e) {
             if (e.target === overlay) closePopup();
         });
 
@@ -218,7 +262,7 @@ var showStreamGeneratorPopup = function(itemId, serverId) {
         });
 
         /* Copy logic */
-        modal.querySelector('#btnCopyUrl').addEventListener('click', function() {
+        modal.querySelector('#btnCopyUrl').addEventListener('click', function () {
             const outputStr = modal.querySelector('#txtOutputUrl').value;
             if (outputStr) {
                 if (navigator.clipboard && window.isSecureContext) {
