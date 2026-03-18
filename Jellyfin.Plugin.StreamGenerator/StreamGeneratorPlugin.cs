@@ -19,17 +19,17 @@ namespace Jellyfin.Plugin.StreamGenerator;
 /// <summary>
 /// The main plugin.
 /// </summary>
-public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
+public class StreamGeneratorPlugin : BasePlugin<PluginConfiguration>, IHasWebPages
 {
-    private readonly ILogger<Plugin> _logger;
+    private readonly ILogger<StreamGeneratorPlugin> _logger;
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="Plugin"/> class.
+    /// Initializes a new instance of the <see cref="StreamGeneratorPlugin"/> class.
     /// </summary>
     /// <param name="applicationPaths">Instance of the <see cref="IApplicationPaths"/> interface.</param>
     /// <param name="xmlSerializer">Instance of the <see cref="IXmlSerializer"/> interface.</param>
     /// <param name="logger">Instance of the <see cref="ILogger{Plugin}"/> interface.</param>
-    public Plugin(IApplicationPaths applicationPaths, IXmlSerializer xmlSerializer, ILogger<Plugin> logger)
+    public StreamGeneratorPlugin(IApplicationPaths applicationPaths, IXmlSerializer xmlSerializer, ILogger<StreamGeneratorPlugin> logger)
         : base(applicationPaths, xmlSerializer)
     {
         _logger = logger;
@@ -47,7 +47,7 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
     /// <summary>
     /// Gets the current plugin instance.
     /// </summary>
-    public static Plugin? Instance { get; private set; }
+    public static StreamGeneratorPlugin? Instance { get; private set; }
 
     /// <inheritdoc />
     public IEnumerable<PluginPageInfo> GetPages()
@@ -71,7 +71,7 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
                     payload.Add("id", Id.ToString());
                     payload.Add("fileNamePattern", ".*\\.chunk\\.js$");
                     payload.Add("callbackAssembly", GetType().Assembly.FullName);
-                    payload.Add("callbackClass", typeof(Plugin).FullName);
+                    payload.Add("callbackClass", typeof(StreamGeneratorPlugin).FullName);
                     payload.Add("callbackMethod", nameof(PatchContextMenu));
 
                     pluginType.GetMethod("RegisterTransformation")?.Invoke(null, new object[] { payload });
@@ -80,7 +80,7 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
             }
             else
             {
-                _logger.LogWarning("FileTransformation plugin not found! Stream Generator will not work without it.");
+                _logger.LogWarning("FileTransformation plugin not found! Stream Generator will not work without it");
             }
         }
         catch (Exception ex)
