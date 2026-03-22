@@ -1,6 +1,6 @@
 <div data-role="page" class="page type-interior pluginConfigurationPage">
     <div class="content-primary">
-        <div class="verticalSection verticalSection-padding">
+        <div class="verticalSection verticalSection-padding" style="max-width: 600px;">
             <div class="sectionTitleContainer">
                 <h2 class="sectionTitle">Stream Generator</h2>
             </div>
@@ -15,14 +15,92 @@
                     </div>
                 </div>
                 <div>
-                    <button is="emby-button" type="submit" class="raised button-confirm block emby-button">Save</button>
+                    <button is="emby-button" type="submit" class="raised button-submit block emby-button">Save</button>
                 </div>
             </form>
+        </div>
+
+        <div class="verticalSection verticalSection-padding" style="max-width: 600px;">
+            <div class="sectionTitleContainer flex align-items-center">
+                <h2 class="sectionTitle">Active Stream Tokens</h2>
+            </div>
+            <style>
+                .revoke-btn {
+                    margin-left: auto;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    border: 1px solid #444;
+                    border-radius: 4px;
+                    width: 44px;
+                    height: 44px;
+                    background: transparent;
+                    cursor: pointer;
+                    transition: all 0.2s ease;
+                }
+                .revoke-btn:hover {
+                    background: rgba(255, 77, 77, 0.1);
+                }
+                .revoke-btn:active {
+                    background: rgba(255, 77, 77, 0.2);
+                }
+            </style>
+            <div id="tokenList" class="paperList">
+                <!-- Populated via JavaScript -->
+            </div>
         </div>
     </div>
     <script>
         (function () {
             var pluginId = 'E5A2A3B4-11D5-4F8A-9E2A-6D4B7A9B3C1D';
+
+            function loadTokens(page) {
+                const tokenList = page.querySelector('#tokenList');
+                tokenList.innerHTML = '<div class="listItem"><div class="listItemBody">Loading...</div></div>';
+
+                ApiClient.getJSON(ApiClient.getUrl('StreamGenerator/Tokens')).then(function (tokens) {
+                    let html = '';
+
+                    if (!tokens || tokens.length === 0) {
+                        html = '<div class="listItem"><div class="listItemBody">No active tokens found.</div></div>';
+                    } else {
+                        tokens.forEach(function (token) {
+                            const expiresDate = new Date(token.ExpiresAt).toLocaleString();
+                            const expiredStr = token.IsExpired ? ' <span style="color: #cc0000; font-weight: bold;">(Expired)</span>' : '';
+
+                            html += '<div class="listItem listItem-border">' +
+                                '<div class="listItemBody">' +
+                                    '<div class="listItemBodyText" style="font-weight: 500;">' + (token.ItemName || 'Unknown Item') + '</div>' +
+                                    '<div class="listItemBodyText secondary" style="margin-top: 4px;">' +
+                                        'User: ' + (token.UserName || 'Unknown') + ' | ' +
+                                        'Expires: ' + expiresDate + expiredStr +
+                                    '</div>' +
+                                    '<div class="listItemBodyText secondary" style="font-family: monospace; font-size: 0.9em; margin-top: 2px;">' +
+                                        'Token: ' + token.Token +
+                                    '</div>' +
+                                '</div>' +
+                                '<button type="button" class="revoke-btn" ' +
+                                        'onclick="window.StreamGeneratorRevokeToken(\'' + token.Token + '\')" title="Revoke Token">' +
+                                    '<i class="material-icons delete" style="color:#ff4d4d; font-size:1.5em; margin:0;"></i>' +
+                                '</button>' +
+                            '</div>';
+                        });
+                    }
+                    tokenList.innerHTML = html;
+                }).catch(function (err) {
+                    tokenList.innerHTML = '<div class="listItem"><div class="listItemBody" style="color: #cc0000;">Error loading tokens.</div></div>';
+                });
+            }
+
+            window.StreamGeneratorRevokeToken = function(token) {
+                ApiClient.ajax({
+                    type: 'DELETE',
+                    url: ApiClient.getUrl('StreamGenerator/Tokens/' + token)
+                }).then(function () {
+                    const page = document.querySelector('.pluginConfigurationPage');
+                    if (page) loadTokens(page);
+                });
+            };
 
             function loadConfig(page) {
                 Dashboard.showLoadingMsg();
@@ -30,6 +108,8 @@
                     page.querySelector('#chkIsEnabled').checked = config.GenerateCustomApiTokens !== false;
                     Dashboard.hideLoadingMsg();
                 });
+
+                loadTokens(page);
             }
 
             document.querySelector('.pluginConfigurationPage').addEventListener('pageshow', function () {
