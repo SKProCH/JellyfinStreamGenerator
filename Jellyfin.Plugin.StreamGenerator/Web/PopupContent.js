@@ -236,29 +236,49 @@ var showStreamGeneratorPopup = function (itemId, serverId) {
             const deviceId = apiClient.deviceId();
             const playSessionId = 'stream_generator_' + Date.now();
 
-            const queryParams = new URLSearchParams({
-                deviceId: deviceId,
-                playSessionId: playSessionId,
-                api_key: apiClient.accessToken(),
-                mediaSourceId: mediaSource.Id,
-                static: false,
-                enableAutoStreamCopy: true,
-                allowVideoStreamCopy: true,
-                allowAudioStreamCopy: true,
-                copyTimestamps: copyTimestamps,
-                videoBitrate: maxVideoBitrate
+            const buildUrl = function (apiKey) {
+                const queryParams = new URLSearchParams({
+                    deviceId: deviceId,
+                    playSessionId: playSessionId,
+                    api_key: apiKey,
+                    mediaSourceId: mediaSource.Id,
+                    static: false,
+                    enableAutoStreamCopy: true,
+                    allowVideoStreamCopy: true,
+                    allowAudioStreamCopy: true,
+                    copyTimestamps: copyTimestamps,
+                    videoBitrate: maxVideoBitrate
+                });
+
+                if (videoCodecsStr) queryParams.append('videoCodec', videoCodecsStr);
+                if (audioCodecsStr) queryParams.append('audioCodec', audioCodecsStr);
+                if (audioStreamIndex !== '') queryParams.append('audioStreamIndex', audioStreamIndex);
+                if (subtitleStreamIndex !== '') {
+                    queryParams.append('subtitleStreamIndex', subtitleStreamIndex);
+                    queryParams.append('subtitleMethod', subtitleMethod);
+                }
+
+                const finalUrl = serverUrl + '/Videos/' + itemId + '/master.m3u8?' + decodeURIComponent(queryParams.toString());
+                modal.querySelector('#txtOutputUrl').value = finalUrl;
+            };
+
+            apiClient.getJSON(apiClient.getUrl('StreamGenerator/Settings')).then(function (settings) {
+                if (settings.GenerateCustomApiTokens) {
+                    apiClient.fetch({
+                        type: 'POST',
+                        url: apiClient.getUrl('StreamGenerator/GenerateToken', { itemId: itemId }),
+                        dataType: 'text'
+                    }).then(function (token) {
+                        // ASP.NET Core returns strings as JSON strings (with quotes), so we must strip them
+                        const cleanToken = token.replace(/^"|"$/g, '');
+                        buildUrl(cleanToken);
+                    }).catch(function () {
+                        buildUrl(apiClient.accessToken());
+                    });
+                } else {
+                    buildUrl(apiClient.accessToken());
+                }
             });
-
-            if (videoCodecsStr) queryParams.append('videoCodec', videoCodecsStr);
-            if (audioCodecsStr) queryParams.append('audioCodec', audioCodecsStr);
-            if (audioStreamIndex !== '') queryParams.append('audioStreamIndex', audioStreamIndex);
-            if (subtitleStreamIndex !== '') {
-                queryParams.append('subtitleStreamIndex', subtitleStreamIndex);
-                queryParams.append('subtitleMethod', subtitleMethod);
-            }
-
-            const finalUrl = serverUrl + '/Videos/' + itemId + '/master.m3u8?' + decodeURIComponent(queryParams.toString());
-            modal.querySelector('#txtOutputUrl').value = finalUrl;
         });
 
         /* Copy logic */

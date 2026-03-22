@@ -5,6 +5,7 @@ using System.Linq;
 using System.Reflection;
 using System.Runtime.Loader;
 using System.Text.RegularExpressions;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Jellyfin.Plugin.StreamGenerator.Configuration;
 using Jellyfin.Plugin.StreamGenerator.Model;
@@ -35,6 +36,9 @@ public class StreamGeneratorPlugin : BasePlugin<PluginConfiguration>, IHasWebPag
         _logger = logger;
         Instance = this;
 
+        // Load config from JSON, overriding the base XML lazy-load
+        Configuration = LoadJsonConfiguration();
+
         RegisterFileTransformation();
     }
 
@@ -44,6 +48,9 @@ public class StreamGeneratorPlugin : BasePlugin<PluginConfiguration>, IHasWebPag
     /// <inheritdoc />
     public override Guid Id => Guid.Parse("E5A2A3B4-11D5-4F8A-9E2A-6D4B7A9B3C1D");
 
+    /// <inheritdoc />
+    public override string ConfigurationFileName => Path.ChangeExtension(AssemblyFileName, ".json");
+
     /// <summary>
     /// Gets the current plugin instance.
     /// </summary>
@@ -52,7 +59,40 @@ public class StreamGeneratorPlugin : BasePlugin<PluginConfiguration>, IHasWebPag
     /// <inheritdoc />
     public IEnumerable<PluginPageInfo> GetPages()
     {
-        return Array.Empty<PluginPageInfo>();
+        return new[]
+        {
+            new PluginPageInfo
+            {
+                Name = Name,
+                EmbeddedResourcePath = GetType().Namespace + ".Web.configurationPage.html",
+            }
+        };
+    }
+
+    /// <inheritdoc />
+    public override void SaveConfiguration(PluginConfiguration config)
+    {
+        var folder = Path.GetDirectoryName(ConfigurationFilePath)!;
+        Directory.CreateDirectory(folder);
+        File.WriteAllText(ConfigurationFilePath, JsonConvert.SerializeObject(config, Formatting.Indented));
+    }
+
+    private PluginConfiguration LoadJsonConfiguration()
+    {
+        try
+        {
+            if (File.Exists(ConfigurationFilePath))
+            {
+                var json = File.ReadAllText(ConfigurationFilePath);
+                return JsonConvert.DeserializeObject<PluginConfiguration>(json) ?? new PluginConfiguration();
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to load plugin configuration from JSON");
+        }
+
+        return new PluginConfiguration();
     }
 
     private void RegisterFileTransformation()

@@ -1,0 +1,52 @@
+<div data-role="page" class="page type-interior pluginConfigurationPage">
+    <div class="content-primary">
+        <div class="verticalSection verticalSection-padding">
+            <div class="sectionTitleContainer">
+                <h2 class="sectionTitle">Stream Generator</h2>
+            </div>
+            <form class="streamGeneratorConfigForm">
+                <div class="checkboxContainer checkboxContainer-withDescription">
+                    <label class="emby-checkbox-label">
+                        <input is="emby-checkbox" type="checkbox" id="chkIsEnabled" />
+                        <span>Enable custom stream tokens</span>
+                    </label>
+                    <div class="fieldDescription">
+                        When enabled, requests to /Videos/.../master.m3u8 with a valid ?api_key= token bypass normal authentication.
+                    </div>
+                </div>
+                <div>
+                    <button is="emby-button" type="submit" class="raised button-confirm block emby-button">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    <script>
+        (function () {
+            var pluginId = 'E5A2A3B4-11D5-4F8A-9E2A-6D4B7A9B3C1D';
+
+            function loadConfig(page) {
+                Dashboard.showLoadingMsg();
+                ApiClient.getPluginConfiguration(pluginId).then(function (config) {
+                    page.querySelector('#chkIsEnabled').checked = config.GenerateCustomApiTokens !== false;
+                    Dashboard.hideLoadingMsg();
+                });
+            }
+
+            document.querySelector('.pluginConfigurationPage').addEventListener('pageshow', function () {
+                var page = this;
+                loadConfig(page);
+
+                page.querySelector('.streamGeneratorConfigForm').addEventListener('submit', function (e) {
+                    e.preventDefault();
+                    Dashboard.showLoadingMsg();
+                    ApiClient.getPluginConfiguration(pluginId).then(function (config) {
+                        config.GenerateCustomApiTokens = page.querySelector('#chkIsEnabled').checked;
+                        ApiClient.updatePluginConfiguration(pluginId, config).then(function (result) {
+                            Dashboard.processServerConfigurationUpdateResult(result);
+                        });
+                    });
+                });
+            });
+        })();
+    </script>
+</div>

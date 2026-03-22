@@ -14,5 +14,7 @@ public class PluginConfiguration : BasePluginConfiguration
     {
     }
 
+    public bool GenerateCustomApiTokens { get; set; } = true;
+
     public Dictionary<string, StreamTokenInformation> StreamTokens { get; set; } = new();
 }
