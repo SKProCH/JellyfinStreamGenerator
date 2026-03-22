@@ -40,11 +40,24 @@
                 }
                 .revoke-btn:hover {
                     background: rgba(255, 77, 77, 0.1);
+                    border-color: #ff4d4d;
                 }
                 .revoke-btn:active {
                     background: rgba(255, 77, 77, 0.2);
                 }
             </style>
+
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <div class="selectContainer" style="margin: 0; max-width: 250px; flex-grow: 1;">
+                    <select is="emby-select" id="userFilterSelect" label="Filter by user" class="emby-select">
+                        <option value="all">All Users</option>
+                    </select>
+                </div>
+                <button is="emby-button" type="button" class="raised button-submit emby-button" id="btnRevokeAll" style="background: #cc0000; margin-left: 15px; padding: 0.6em 1.5em; width: auto;">
+                    Revoke All
+                </button>
+            </div>
+
             <div id="tokenList" class="paperList">
                 <!-- Populated via JavaScript -->
             </div>
@@ -54,39 +67,90 @@
         (function () {
             var pluginId = 'E5A2A3B4-11D5-4F8A-9E2A-6D4B7A9B3C1D';
 
+            let allTokens = [];
+
+            function renderTokens(page) {
+                const tokenList = page.querySelector('#tokenList');
+                const userFilter = page.querySelector('#userFilterSelect').value;
+                let html = '';
+
+                const filteredTokens = userFilter === 'all'
+                    ? allTokens
+                    : allTokens.filter(t => t.UserId === userFilter);
+
+                if (!filteredTokens || filteredTokens.length === 0) {
+                    html = '<div class="listItem"><div class="listItemBody">No active tokens found.</div></div>';
+                } else {
+                    filteredTokens.forEach(function (token) {
+                        const expiresDate = new Date(token.ExpiresAt).toLocaleString();
+                        const expiredStr = token.IsExpired ? ' <span style="color: #cc0000; font-weight: bold;">(Expired)</span>' : '';
+
+                        html += '<div class="listItem listItem-border">' +
+                            '<div class="listItemBody">' +
+                                '<div class="listItemBodyText" style="font-weight: 500;">' + (token.ItemName || 'Unknown Item') + '</div>' +
+                                '<div class="listItemBodyText secondary" style="margin-top: 4px;">' +
+                                    'User: ' + (token.UserName || 'Unknown') + ' | ' +
+                                    'Expires: ' + expiresDate + expiredStr +
+                                '</div>' +
+                                '<div class="listItemBodyText secondary" style="font-family: monospace; font-size: 0.9em; margin-top: 2px;">' +
+                                    'Token: ' + token.Token +
+                                '</div>' +
+                            '</div>' +
+                            '<button type="button" class="revoke-btn" ' +
+                                    'onclick="window.StreamGeneratorRevokeToken(\'' + token.Token + '\')" title="Revoke Token">' +
+                                '<i class="material-icons delete" style="color:#ff4d4d; font-size:1.5em; margin:0;"></i>' +
+                            '</button>' +
+                        '</div>';
+                    });
+                }
+                tokenList.innerHTML = html;
+
+                // Update Revoke All button text
+                const btnRevokeAll = page.querySelector('#btnRevokeAll');
+                if (filteredTokens.length === 0) {
+                    btnRevokeAll.style.display = 'none';
+                } else {
+                    btnRevokeAll.style.display = 'inline-block';
+                    if (userFilter === 'all') {
+                        btnRevokeAll.innerText = 'Revoke All Tokens';
+                    } else {
+                        const userName = filteredTokens[0].UserName;
+                        btnRevokeAll.innerText = 'Revoke All for ' + userName;
+                    }
+                }
+            }
+
+            function populateUserFilter(page) {
+                const select = page.querySelector('#userFilterSelect');
+                const currentValue = select.value;
+
+                // Extract unique users
+                const users = {};
+                allTokens.forEach(t => {
+                    if (!users[t.UserId]) {
+                        users[t.UserId] = t.UserName || 'Unknown';
+                    }
+                });
+
+                let optionsHtml = '<option value="all">All Users</option>';
+                for (const [id, name] of Object.entries(users)) {
+                    optionsHtml += '<option value="' + id + '">' + name + '</option>';
+                }
+
+                select.innerHTML = optionsHtml;
+                if (users[currentValue]) {
+                    select.value = currentValue;
+                }
+            }
+
             function loadTokens(page) {
                 const tokenList = page.querySelector('#tokenList');
                 tokenList.innerHTML = '<div class="listItem"><div class="listItemBody">Loading...</div></div>';
 
                 ApiClient.getJSON(ApiClient.getUrl('StreamGenerator/Tokens')).then(function (tokens) {
-                    let html = '';
-
-                    if (!tokens || tokens.length === 0) {
-                        html = '<div class="listItem"><div class="listItemBody">No active tokens found.</div></div>';
-                    } else {
-                        tokens.forEach(function (token) {
-                            const expiresDate = new Date(token.ExpiresAt).toLocaleString();
-                            const expiredStr = token.IsExpired ? ' <span style="color: #cc0000; font-weight: bold;">(Expired)</span>' : '';
-
-                            html += '<div class="listItem listItem-border">' +
-                                '<div class="listItemBody">' +
-                                    '<div class="listItemBodyText" style="font-weight: 500;">' + (token.ItemName || 'Unknown Item') + '</div>' +
-                                    '<div class="listItemBodyText secondary" style="margin-top: 4px;">' +
-                                        'User: ' + (token.UserName || 'Unknown') + ' | ' +
-                                        'Expires: ' + expiresDate + expiredStr +
-                                    '</div>' +
-                                    '<div class="listItemBodyText secondary" style="font-family: monospace; font-size: 0.9em; margin-top: 2px;">' +
-                                        'Token: ' + token.Token +
-                                    '</div>' +
-                                '</div>' +
-                                '<button type="button" class="revoke-btn" ' +
-                                        'onclick="window.StreamGeneratorRevokeToken(\'' + token.Token + '\')" title="Revoke Token">' +
-                                    '<i class="material-icons delete" style="color:#ff4d4d; font-size:1.5em; margin:0;"></i>' +
-                                '</button>' +
-                            '</div>';
-                        });
-                    }
-                    tokenList.innerHTML = html;
+                    allTokens = tokens || [];
+                    populateUserFilter(page);
+                    renderTokens(page);
                 }).catch(function (err) {
                     tokenList.innerHTML = '<div class="listItem"><div class="listItemBody" style="color: #cc0000;">Error loading tokens.</div></div>';
                 });
@@ -114,6 +178,38 @@
 
             document.querySelector('.pluginConfigurationPage').addEventListener('pageshow', function () {
                 var page = this;
+
+                page.querySelector('#userFilterSelect').addEventListener('change', function () {
+                    renderTokens(page);
+                });
+
+                page.querySelector('#btnRevokeAll').addEventListener('click', function () {
+                    const userFilter = page.querySelector('#userFilterSelect').value;
+                    const msg = userFilter === 'all'
+                        ? 'Are you sure you want to revoke ALL stream tokens for ALL users?'
+                        : 'Are you sure you want to revoke all stream tokens for this user?';
+
+                    Dashboard.confirm(msg, 'Revoke Tokens', function (result) {
+                        if (result) {
+                            Dashboard.showLoadingMsg();
+                            let url = ApiClient.getUrl('StreamGenerator/Tokens');
+                            if (userFilter !== 'all') {
+                                url += '?userId=' + userFilter;
+                            }
+
+                            ApiClient.ajax({
+                                type: 'DELETE',
+                                url: url
+                            }).then(function () {
+                                Dashboard.hideLoadingMsg();
+                                loadTokens(page);
+                            }).catch(function () {
+                                Dashboard.hideLoadingMsg();
+                            });
+                        }
+                    });
+                });
+
                 loadConfig(page);
 
                 page.querySelector('.streamGeneratorConfigForm').addEventListener('submit', function (e) {

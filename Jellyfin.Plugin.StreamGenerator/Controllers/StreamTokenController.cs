@@ -71,6 +71,41 @@ public class StreamTokenController(
         return Ok(result.OrderByDescending(x => x.CreatedAt));
     }
 
+    [HttpDelete("Tokens")]
+    [Authorize(Roles = "Administrator")]
+    public ActionResult RevokeTokensBulk([FromQuery] Guid? userId)
+    {
+        var plugin = StreamGeneratorPlugin.Instance;
+        if (plugin is null)
+            return StatusCode(StatusCodes.Status503ServiceUnavailable);
+
+        var tokens = plugin.Configuration.StreamTokens;
+        var oldCount = tokens.Count;
+
+        if (userId.HasValue)
+        {
+            var keysToRemove = tokens
+                .Where(kv => kv.Value.UserId == userId.Value)
+                .Select(kv => kv.Key)
+                .ToList();
+            foreach (var key in keysToRemove)
+            {
+                tokens.Remove(key);
+            }
+        }
+        else if (oldCount > 0)
+        {
+            tokens.Clear();
+        }
+
+        if (tokens.Count != oldCount)
+        {
+            plugin.SaveConfiguration();
+        }
+
+        return NoContent();
+    }
+
     [HttpDelete("Tokens/{token}")]
     [Authorize(Roles = "Administrator")]
     public ActionResult RevokeToken(string token)
@@ -127,4 +162,3 @@ public sealed class StreamTokenDto
     public DateTimeOffset ExpiresAt { get; set; }
     public bool IsExpired { get; set; }
 }
-
