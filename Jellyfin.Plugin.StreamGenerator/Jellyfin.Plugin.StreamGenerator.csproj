@@ -20,4 +20,8 @@
     <EmbeddedResource Include="Web\PopupContent.js" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="Decorators\" />
+  </ItemGroup>
+
 </Project>

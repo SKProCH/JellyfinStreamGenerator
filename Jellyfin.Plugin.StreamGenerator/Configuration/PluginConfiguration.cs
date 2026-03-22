@@ -13,4 +13,6 @@ public class PluginConfiguration : BasePluginConfiguration
     public PluginConfiguration()
     {
     }
+
+    public Dictionary<string, StreamTokenInformation> StreamTokens { get; set; } = new();
 }
