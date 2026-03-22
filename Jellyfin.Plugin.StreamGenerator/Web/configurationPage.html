@@ -14,6 +14,19 @@
                         When enabled, requests to /Videos/.../master.m3u8 with a valid ?api_key= token bypass normal authentication.
                     </div>
                 </div>
+
+                <div class="inputContainer" style="margin-top: 1.5em;">
+                    <label class="inputLabel" for="txtDefaultDuration">Default token duration (hours):</label>
+                    <input is="emby-input" type="number" id="txtDefaultDuration" step="any" min="0" class="emby-input" />
+                    <div class="fieldDescription">Leave empty for infinite.</div>
+                </div>
+
+                <div class="inputContainer">
+                    <label class="inputLabel" for="txtMaxDuration">Max token duration (hours):</label>
+                    <input is="emby-input" type="number" id="txtMaxDuration" step="any" min="0" class="emby-input" />
+                    <div class="fieldDescription">Leave empty for infinite.</div>
+                </div>
+
                 <div>
                     <button is="emby-button" type="submit" class="raised button-submit block emby-button">Save</button>
                 </div>
@@ -82,7 +95,7 @@
                     html = '<div class="listItem"><div class="listItemBody">No active tokens found.</div></div>';
                 } else {
                     filteredTokens.forEach(function (token) {
-                        const expiresDate = new Date(token.ExpiresAt).toLocaleString();
+                        const expiresDate = token.ExpiresAt ? new Date(token.ExpiresAt).toLocaleString() : 'Never';
                         const expiredStr = token.IsExpired ? ' <span style="color: #cc0000; font-weight: bold;">(Expired)</span>' : '';
 
                         html += '<div class="listItem listItem-border">' +
@@ -170,6 +183,8 @@
                 Dashboard.showLoadingMsg();
                 ApiClient.getPluginConfiguration(pluginId).then(function (config) {
                     page.querySelector('#chkIsEnabled').checked = config.GenerateCustomApiTokens !== false;
+                    page.querySelector('#txtDefaultDuration').value = config.DefaultCustomTokenDurationHours !== null ? config.DefaultCustomTokenDurationHours : '';
+                    page.querySelector('#txtMaxDuration').value = config.MaxCustomTokenDurationHours !== null ? config.MaxCustomTokenDurationHours : '';
                     Dashboard.hideLoadingMsg();
                 });
 
@@ -217,6 +232,13 @@
                     Dashboard.showLoadingMsg();
                     ApiClient.getPluginConfiguration(pluginId).then(function (config) {
                         config.GenerateCustomApiTokens = page.querySelector('#chkIsEnabled').checked;
+
+                        const defDur = page.querySelector('#txtDefaultDuration').value;
+                        config.DefaultCustomTokenDurationHours = defDur ? parseFloat(defDur) : null;
+
+                        const maxDur = page.querySelector('#txtMaxDuration').value;
+                        config.MaxCustomTokenDurationHours = maxDur ? parseFloat(maxDur) : null;
+
                         ApiClient.updatePluginConfiguration(pluginId, config).then(function (result) {
                             Dashboard.processServerConfigurationUpdateResult(result);
                         });

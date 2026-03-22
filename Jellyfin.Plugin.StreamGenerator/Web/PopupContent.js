@@ -42,8 +42,9 @@ var showStreamGeneratorPopup = function (itemId, serverId) {
         apiClient.getItem(apiClient.getCurrentUserId(), itemId),
         apiClient.getJSON(apiClient.getUrl('Encoding/PublicOptions')).catch(() => ({
             TranscodingVideoCodecs: ['h264']
-        }))
-    ]).then(([item, encodingOptions]) => {
+        })),
+        apiClient.getJSON(apiClient.getUrl('StreamGenerator/Settings')).catch(() => ({}))
+    ]).then(([item, encodingOptions, settings]) => {
         if (!item || !item.MediaSources || item.MediaSources.length === 0) {
             alert("Cannot get media sources for this item.");
             return;
@@ -157,6 +158,50 @@ var showStreamGeneratorPopup = function (itemId, serverId) {
         html += subtitleOptions;
         html += '</select></label>';
 
+        /* Build Duration Options based on Settings */
+        let durationOptionsHtml = '';
+        const presetHours = [1, 6, 12, 24, 72, 168, 360, 720]; // up to 30 days
+        const presetLabels = {
+            1: '1 Hour',
+            6: '6 Hours',
+            12: '12 Hours',
+            24: '1 Day',
+            72: '3 Days',
+            168: '7 Days',
+            360: '15 Days',
+            720: '30 Days'
+        };
+
+        const maxDur = settings.MaxTokenDurationHours;
+        const defDur = settings.DefaultTokenDurationHours;
+
+        let validPresets = presetHours;
+        if (maxDur !== undefined && maxDur !== null) {
+            validPresets = validPresets.filter(h => h <= maxDur);
+            if (!validPresets.includes(maxDur)) {
+                validPresets.push(maxDur);
+                presetLabels[maxDur] = maxDur + ' Hours (Max)';
+            }
+        }
+
+        if (defDur !== undefined && defDur !== null && !validPresets.includes(defDur)) {
+            if (maxDur === null || maxDur === undefined || defDur <= maxDur) {
+                validPresets.push(defDur);
+                presetLabels[defDur] = defDur + ' Hours (Default)';
+            }
+        }
+
+        validPresets.sort((a, b) => a - b);
+
+        validPresets.forEach(h => {
+            const isSelected = h === defDur ? ' selected' : '';
+            durationOptionsHtml += '<option value="' + h + '"' + isSelected + '>' + (presetLabels[h] || h + ' Hours') + '</option>';
+        });
+
+        if (maxDur === null || maxDur === undefined) {
+            durationOptionsHtml += '<option value=""' + (defDur === null || defDur === undefined ? ' selected' : '') + '>Infinite</option>';
+        }
+
         html += '<label>Subtitle Method<br>';
         html += '<select id="subtitleMethod" style="' + selectStyle + '">';
         html += '<option value="Hls" selected>HLS</option>';
@@ -168,7 +213,12 @@ var showStreamGeneratorPopup = function (itemId, serverId) {
         html += '<details style="margin-bottom: 15px; background: #333; padding: 10px; border-radius: 4px; border: 1px solid #444;">';
         html += '<summary style="cursor: pointer; font-weight: bold; margin-bottom: 5px;">Advanced</summary>';
 
-        html += '<label style="display: block; margin-top: 10px;">Max Video Bitrate: <span id="bitrateDisplay">' + sliderMax + '</span> Mbps<br>';
+        html += '<label style="display: block; margin-top: 10px;">Token Lifetime:<br>';
+        html += '<select id="tokenDurationHours" style="' + selectStyle + ' margin-bottom: 0;">';
+        html += durationOptionsHtml;
+        html += '</select></label>';
+
+        html += '<label style="display: block; margin-top: 15px;">Max Video Bitrate: <span id="bitrateDisplay">' + sliderMax + '</span> Mbps<br>';
         html += '<input type="range" id="maxVideoBitrate" style="' + selectStyle + ' cursor: pointer; margin-bottom: 0;" min="1" max="' + sliderMax + '" value="' + sliderMax + '"></label>';
 
         html += '<label style="display: flex; align-items: center; margin-top: 15px; cursor: pointer;">';
@@ -264,9 +314,15 @@ var showStreamGeneratorPopup = function (itemId, serverId) {
 
             apiClient.getJSON(apiClient.getUrl('StreamGenerator/Settings')).then(function (settings) {
                 if (settings.GenerateCustomApiTokens) {
+                    const selectedDuration = modal.querySelector('#tokenDurationHours').value;
+                    const queryObj = { itemId: itemId };
+                    if (selectedDuration !== '') {
+                        queryObj.durationHours = selectedDuration;
+                    }
+
                     apiClient.fetch({
                         type: 'POST',
-                        url: apiClient.getUrl('StreamGenerator/GenerateToken', { itemId: itemId }),
+                        url: apiClient.getUrl('StreamGenerator/GenerateToken', queryObj),
                         dataType: 'text'
                     }).then(function (token) {
                         // ASP.NET Core returns strings as JSON strings (with quotes), so we must strip them

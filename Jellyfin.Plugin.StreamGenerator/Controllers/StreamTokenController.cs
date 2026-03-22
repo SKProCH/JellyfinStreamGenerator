@@ -27,7 +27,9 @@ public class StreamTokenController(
 
         return Ok(new PluginSettings
         {
-            GenerateCustomApiTokens = plugin.Configuration.GenerateCustomApiTokens
+            GenerateCustomApiTokens = plugin.Configuration.GenerateCustomApiTokens,
+            DefaultTokenDurationHours = plugin.Configuration.DefaultCustomTokenDurationHours,
+            MaxTokenDurationHours = plugin.Configuration.MaxCustomTokenDurationHours
         });
     }
 
@@ -124,20 +126,31 @@ public class StreamTokenController(
 
     [HttpPost("GenerateToken")]
     [Authorize]
-    public async Task<ActionResult<string>> GenerateToken([FromQuery] string itemId)
+    public async Task<ActionResult<string>> GenerateToken([FromQuery] string itemId, [FromQuery] double? durationHours = null)
     {
         var plugin = StreamGeneratorPlugin.Instance;
         if (plugin is null)
             return StatusCode(StatusCodes.Status503ServiceUnavailable);
 
+        var config = plugin.Configuration;
         var authInfo = await authorizationContext.GetAuthorizationInfo(HttpContext).ConfigureAwait(false);
 
+        var finalDurationHours = durationHours ?? config.DefaultCustomTokenDurationHours;
+
+        if (config.MaxCustomTokenDurationHours.HasValue)
+        {
+            if (!finalDurationHours.HasValue || finalDurationHours.Value > config.MaxCustomTokenDurationHours.Value)
+            {
+                finalDurationHours = config.MaxCustomTokenDurationHours.Value;
+            }
+        }
+
         var token = Guid.NewGuid().ToString("n");
-        plugin.Configuration.StreamTokens[token] = new StreamTokenInformation
+        config.StreamTokens[token] = new StreamTokenInformation
         {
             UserId = authInfo.UserId,
             ItemId = itemId,
-            Duration = DefaultTokenDuration,
+            Duration = finalDurationHours.HasValue ? TimeSpan.FromHours(finalDurationHours.Value) : null,
             CreatedAt = DateTimeOffset.UtcNow,
         };
         plugin.SaveConfiguration();
@@ -149,6 +162,8 @@ public class StreamTokenController(
 public sealed class PluginSettings
 {
     public bool GenerateCustomApiTokens { get; set; }
+    public double? DefaultTokenDurationHours { get; set; }
+    public double? MaxTokenDurationHours { get; set; }
 }
 
 public sealed class StreamTokenDto
@@ -159,6 +174,6 @@ public sealed class StreamTokenDto
     public required Guid UserId { get; set; }
     public string? UserName { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
-    public DateTimeOffset ExpiresAt { get; set; }
+    public DateTimeOffset? ExpiresAt { get; set; }
     public bool IsExpired { get; set; }
 }

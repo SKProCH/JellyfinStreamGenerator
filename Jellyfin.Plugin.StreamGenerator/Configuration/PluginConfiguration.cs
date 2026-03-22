@@ -15,6 +15,8 @@ public class PluginConfiguration : BasePluginConfiguration
     }
 
     public bool GenerateCustomApiTokens { get; set; } = true;
+    public double? DefaultCustomTokenDurationHours { get; set; } = null;
+    public double? MaxCustomTokenDurationHours { get; set; } = null;
 
     public Dictionary<string, StreamTokenInformation> StreamTokens { get; set; } = new();
 }
