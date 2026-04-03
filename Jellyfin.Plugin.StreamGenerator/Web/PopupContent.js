@@ -125,7 +125,10 @@ var showStreamGeneratorPopup = function (itemId, serverId) {
         modal.style.boxShadow = '0 4px 20px rgba(0,0,0,0.5)';
 
         let html = '';
-        html += '<h2 style="margin-top:0; margin-bottom: 20px; font-weight: normal;">Generate Stream URL</h2>';
+        html += '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">';
+        html += '<h2 style="margin: 0; font-weight: normal;">Generate Stream URL</h2>';
+        html += '<button type="button" id="btnMaxCompatibility" style="padding: 4px 10px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; background: #aa5500; color: #fff; font-size: 0.8em;">Max Compatibility</button>';
+        html += '</div>';
 
         html += '<form id="streamGeneratorForm">';
 
@@ -252,6 +255,16 @@ var showStreamGeneratorPopup = function (itemId, serverId) {
         };
 
         modal.querySelector('#btnCancel').addEventListener('click', closePopup);
+
+        /* Maximize Compatibility: keep only h264 + aac */
+        modal.querySelector('#btnMaxCompatibility').addEventListener('click', function () {
+            modal.querySelectorAll('input[name="videoCodec"]').forEach(function (cb) {
+                cb.checked = cb.value === 'h264';
+            });
+            modal.querySelectorAll('input[name="audioCodec"]').forEach(function (cb) {
+                cb.checked = cb.value === 'aac';
+            });
+        });
 
         /* Handle Bitrate Slider Update */
         modal.querySelector('#maxVideoBitrate').addEventListener('input', function (e) {
