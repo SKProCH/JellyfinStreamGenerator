@@ -1,6 +1,32 @@
 var showStreamGeneratorPopup = function (itemId, serverId) {
     const apiClient = window.ApiClient;
 
+    const showToast = function (message) {
+        const toast = document.createElement('div');
+        toast.textContent = message;
+        toast.style.position = 'fixed';
+        toast.style.bottom = '20px';
+        toast.style.left = '50%';
+        toast.style.transform = 'translateX(-50%)';
+        toast.style.backgroundColor = '#333';
+        toast.style.color = '#fff';
+        toast.style.padding = '10px 20px';
+        toast.style.borderRadius = '20px';
+        toast.style.zIndex = '100000';
+        toast.style.fontSize = '14px';
+        toast.style.boxShadow = '0 2px 10px rgba(0,0,0,0.5)';
+        document.body.appendChild(toast);
+        setTimeout(() => {
+            toast.style.transition = 'opacity 0.5s';
+            toast.style.opacity = '0';
+            setTimeout(() => {
+                if (document.body.contains(toast)) {
+                    document.body.removeChild(toast);
+                }
+            }, 500);
+        }, 2500);
+    };
+
     const getFilteredCodecs = function (sourceCodecs, supportedTranscodingCodecs, baseCodecs, fallbackCodec) {
         const sourceCodecsLower = sourceCodecs.map(c => c.toLowerCase());
         const supportedLower = supportedTranscodingCodecs.map(c => c.toLowerCase());
@@ -46,7 +72,7 @@ var showStreamGeneratorPopup = function (itemId, serverId) {
         apiClient.getJSON(apiClient.getUrl('StreamGenerator/Settings')).catch(() => ({}))
     ]).then(([item, encodingOptions, settings]) => {
         if (!item || !item.MediaSources || item.MediaSources.length === 0) {
-            alert("Cannot get media sources for this item.");
+            showToast("Cannot get media sources for this item.");
             return;
         }
 
@@ -230,15 +256,11 @@ var showStreamGeneratorPopup = function (itemId, serverId) {
         html += '</label>';
         html += '</details>';
 
-        html += '<label>Generated URL<br>';
-        html += '<textarea id="txtOutputUrl" rows="4" style="width: 100%; padding: 8px; margin-top: 5px; background: #222; color: #aaa; border: 1px solid #444; border-radius: 4px; font-family: monospace; resize: none; box-sizing: border-box;" readonly></textarea></label>';
-
         const btnStyle = 'padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; margin-left: 10px;';
 
         html += '<div style="display: flex; justify-content: flex-end; margin-top: 20px;">';
         html += '<button type="button" id="btnCancel" style="' + btnStyle + ' background: #444; color: #fff;">Close</button>';
-        html += '<button type="button" id="btnCopyUrl" style="' + btnStyle + ' background: #0078d7; color: #fff;">Copy URL</button>';
-        html += '<button type="submit" style="' + btnStyle + ' background: #52b54b; color: #fff;">Generate</button>';
+        html += '<button type="submit" style="' + btnStyle + ' background: #52b54b; color: #fff;">Generate and Copy</button>';
         html += '</div>';
 
         html += '</form>';
@@ -322,7 +344,30 @@ var showStreamGeneratorPopup = function (itemId, serverId) {
                 }
 
                 const finalUrl = serverUrl + '/Videos/' + itemId + '/master.m3u8?' + decodeURIComponent(queryParams.toString());
-                modal.querySelector('#txtOutputUrl').value = finalUrl;
+
+                if (navigator.clipboard && window.isSecureContext) {
+                    navigator.clipboard.writeText(finalUrl).then(() => {
+                        showToast("URL copied to clipboard");
+                    }).catch(err => {
+                        showToast("Failed to copy: " + err);
+                    });
+                } else {
+                    const textArea = document.createElement("textarea");
+                    textArea.value = finalUrl;
+                    textArea.style.position = "fixed";
+                    textArea.style.left = "-999999px";
+                    textArea.style.top = "-999999px";
+                    document.body.appendChild(textArea);
+                    textArea.focus();
+                    textArea.select();
+                    try {
+                        document.execCommand('copy');
+                        showToast("URL copied to clipboard");
+                    } catch (err) {
+                        showToast("Failed to copy");
+                    }
+                    textArea.remove();
+                }
             };
 
             apiClient.getJSON(apiClient.getUrl('StreamGenerator/Settings')).then(function (settings) {
@@ -348,36 +393,6 @@ var showStreamGeneratorPopup = function (itemId, serverId) {
                     buildUrl(apiClient.accessToken());
                 }
             });
-        });
-
-        /* Copy logic */
-        modal.querySelector('#btnCopyUrl').addEventListener('click', function () {
-            const outputStr = modal.querySelector('#txtOutputUrl').value;
-            if (outputStr) {
-                if (navigator.clipboard && window.isSecureContext) {
-                    navigator.clipboard.writeText(outputStr).then(() => {
-                        alert("URL copied to clipboard");
-                    }).catch(err => {
-                        alert("Failed to copy: " + err);
-                    });
-                } else {
-                    const textArea = document.createElement("textarea");
-                    textArea.value = outputStr;
-                    textArea.style.position = "fixed";
-                    textArea.style.left = "-999999px";
-                    textArea.style.top = "-999999px";
-                    document.body.appendChild(textArea);
-                    textArea.focus();
-                    textArea.select();
-                    try {
-                        document.execCommand('copy');
-                        alert("URL copied to clipboard");
-                    } catch (err) {
-                        alert("Failed to copy");
-                    }
-                    textArea.remove();
-                }
-            }
         });
     });
 };
