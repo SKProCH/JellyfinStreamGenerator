@@ -170,9 +170,9 @@ jobs:
           PLUGIN_EXISTS=$(jq --arg guid "$GUID" 'map(select(.guid == $guid)) | length' pages/manifest.json)
 
           if [ "$PLUGIN_EXISTS" -gt "0" ]; then
-            # Append version to existing plugin entry
+            # Prepend version to existing plugin entry
             jq --arg guid "$GUID" --argjson newver "$NEW_VERSION" \
-              'map(if .guid == $guid then .versions += [$newver] else . end)' \
+              'map(if .guid == $guid then .versions = [$newver] + .versions else . end)' \
               pages/manifest.json > pages/manifest_tmp.json
           else
             # Create new plugin entry
