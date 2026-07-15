@@ -13,5 +13,4 @@ category: "General"
 owner: "SKProCH"
 artifacts:
   - "Jellyfin.Plugin.StreamGenerator.dll"
-  - "Newtonsoft.Json.dll"
 changelog: ""
