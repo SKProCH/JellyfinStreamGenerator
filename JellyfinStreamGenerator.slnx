@@ -1,3 +1,4 @@
 <Solution>
   <Project Path="Jellyfin.Plugin.StreamGenerator/Jellyfin.Plugin.StreamGenerator.csproj" />
+  <Project Path="Jellyfin.Plugin.StreamGenerator.Tests/Jellyfin.Plugin.StreamGenerator.Tests.csproj" />
 </Solution>
