@@ -12,22 +12,23 @@ namespace Jellyfin.Plugin.StreamGenerator.Controllers;
 public class StreamTokenController(
     IAuthorizationContext authorizationContext,
     ILibraryManager libraryManager,
-    IUserManager userManager)
+    IUserManager userManager,
+    IStreamGeneratorConfigurationAccessor configurationAccessor)
     : ControllerBase
 {
     [HttpGet("Settings")]
     [Authorize]
     public ActionResult<PluginSettings> GetSettings()
     {
-        var plugin = StreamGeneratorPlugin.Instance;
-        if (plugin is null)
+        var config = configurationAccessor.Configuration;
+        if (config is null)
             return StatusCode(StatusCodes.Status503ServiceUnavailable);
 
         return Ok(new PluginSettings
         {
-            GenerateCustomApiTokens = plugin.Configuration.GenerateCustomApiTokens,
-            DefaultTokenDurationHours = plugin.Configuration.DefaultCustomTokenDurationHours,
-            MaxTokenDurationHours = plugin.Configuration.MaxCustomTokenDurationHours
+            GenerateCustomApiTokens = config.GenerateCustomApiTokens,
+            DefaultTokenDurationHours = config.DefaultCustomTokenDurationHours,
+            MaxTokenDurationHours = config.MaxCustomTokenDurationHours
         });
     }
 
@@ -35,13 +36,13 @@ public class StreamTokenController(
     [Authorize(Roles = "Administrator")]
     public ActionResult<IEnumerable<StreamTokenDto>> GetTokens()
     {
-        var plugin = StreamGeneratorPlugin.Instance;
-        if (plugin is null)
+        var config = configurationAccessor.Configuration;
+        if (config is null)
             return StatusCode(StatusCodes.Status503ServiceUnavailable);
 
         var result = new List<StreamTokenDto>();
 
-        foreach (var (tokenStr, tokenInfo) in plugin.Configuration.StreamTokens)
+        foreach (var (tokenStr, tokenInfo) in config.StreamTokens)
         {
             var user = userManager.GetUserById(tokenInfo.UserId);
             var itemName = "Unknown Item";
@@ -75,11 +76,11 @@ public class StreamTokenController(
     [Authorize(Roles = "Administrator")]
     public ActionResult RevokeTokensBulk([FromQuery] Guid? userId)
     {
-        var plugin = StreamGeneratorPlugin.Instance;
-        if (plugin is null)
+        var config = configurationAccessor.Configuration;
+        if (config is null)
             return StatusCode(StatusCodes.Status503ServiceUnavailable);
 
-        var tokens = plugin.Configuration.StreamTokens;
+        var tokens = config.StreamTokens;
         var oldCount = tokens.Count;
 
         if (userId.HasValue)
@@ -100,7 +101,7 @@ public class StreamTokenController(
 
         if (tokens.Count != oldCount)
         {
-            plugin.SaveConfiguration();
+            configurationAccessor.Save();
         }
 
         return NoContent();
@@ -110,13 +111,13 @@ public class StreamTokenController(
     [Authorize(Roles = "Administrator")]
     public ActionResult RevokeToken(string token)
     {
-        var plugin = StreamGeneratorPlugin.Instance;
-        if (plugin is null)
+        var config = configurationAccessor.Configuration;
+        if (config is null)
             return StatusCode(StatusCodes.Status503ServiceUnavailable);
 
-        if (plugin.Configuration.StreamTokens.Remove(token))
+        if (config.StreamTokens.Remove(token))
         {
-            plugin.SaveConfiguration();
+            configurationAccessor.Save();
         }
 
         return NoContent();
@@ -126,11 +127,10 @@ public class StreamTokenController(
     [Authorize]
     public async Task<ActionResult<string>> GenerateToken([FromQuery] string itemId, [FromQuery] double? durationHours = null)
     {
-        var plugin = StreamGeneratorPlugin.Instance;
-        if (plugin is null)
+        var config = configurationAccessor.Configuration;
+        if (config is null)
             return StatusCode(StatusCodes.Status503ServiceUnavailable);
 
-        var config = plugin.Configuration;
         var authInfo = await authorizationContext.GetAuthorizationInfo(HttpContext).ConfigureAwait(false);
 
         var finalDurationHours = durationHours ?? config.DefaultCustomTokenDurationHours;
@@ -151,7 +151,7 @@ public class StreamTokenController(
             Duration = finalDurationHours.HasValue ? TimeSpan.FromHours(finalDurationHours.Value) : null,
             CreatedAt = DateTimeOffset.UtcNow,
         };
-        plugin.SaveConfiguration();
+        configurationAccessor.Save();
 
         return Ok(token);
     }

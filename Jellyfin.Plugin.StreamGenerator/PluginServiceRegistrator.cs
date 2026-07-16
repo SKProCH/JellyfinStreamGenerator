@@ -1,4 +1,5 @@
 ﻿using Jellyfin.Plugin.StreamGenerator.Decorators;
+using Jellyfin.Plugin.StreamGenerator.Configuration;
 using MediaBrowser.Controller;
 using MediaBrowser.Controller.MediaEncoding;
 using MediaBrowser.Controller.Net;
@@ -12,6 +13,7 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
 {
     public void RegisterServices(IServiceCollection serviceCollection, IServerApplicationHost applicationHost)
     {
+        serviceCollection.AddSingleton<IStreamGeneratorConfigurationAccessor, StreamGeneratorConfigurationAccessor>();
         serviceCollection.Decorate<IAuthorizationContext, CustomStreamTokensAuthorizationContext>();
         serviceCollection.AddSingleton<IAdvancedTranscodeManager, AdvancedTranscodeManager>();
         serviceCollection.Configure<MvcOptions>(opts => opts.Filters.Add<DynamicHlsContentInterceptionFilter>());  

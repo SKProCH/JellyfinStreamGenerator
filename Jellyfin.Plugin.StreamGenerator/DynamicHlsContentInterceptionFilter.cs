@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.AspNetCore.WebUtilities;
@@ -9,7 +10,7 @@ using Microsoft.Extensions.Primitives;
 
 namespace Jellyfin.Plugin.StreamGenerator;
 
-public class DynamicHlsContentInterceptionFilter(IAdvancedTranscodeManager advancedTranscodeManager, ILogger<DynamicHlsContentInterceptionFilter> logger) : IAsyncActionFilter
+public partial class DynamicHlsContentInterceptionFilter(IAdvancedTranscodeManager advancedTranscodeManager, ILogger<DynamicHlsContentInterceptionFilter> logger) : IAsyncActionFilter
 {
     private const string SessionPrefix = "sg_";
 
@@ -17,7 +18,7 @@ public class DynamicHlsContentInterceptionFilter(IAdvancedTranscodeManager advan
     {
         var request = context.HttpContext.Request;
 
-        if (!TryParseStreamGeneratorSegmentRequest(context, request, out var segmentId, out var configKey))
+        if (!TryParseStreamGeneratorSegmentRequest(context, request, out var segmentId, out var configKey, out var requestedSessionId))
         {
             await next();
             return;
@@ -35,11 +36,20 @@ public class DynamicHlsContentInterceptionFilter(IAdvancedTranscodeManager advan
                         && j.Path != null)
             .ToList();
 
-        string? playSessionId = null;
+        string? playSessionId = IsSessionIdForPrefix(requestedSessionId, prefix)
+            ? requestedSessionId
+            : null;
         string? deviceId = null;
 
+        if (playSessionId is not null)
+        {
+            var requestedJob = candidateJobs.FirstOrDefault(job =>
+                string.Equals(job.PlaySessionId, playSessionId, StringComparison.OrdinalIgnoreCase));
+            deviceId = requestedJob?.DeviceId ?? playSessionId;
+        }
+
         // First: check if the segment file already exists on disk for any candidate session
-        foreach (var job in candidateJobs)
+        foreach (var job in playSessionId is null ? candidateJobs : [])
         {
             var segmentPath = GetSegmentPath(job.Path!, segmentId, context);
             if (segmentPath != null && File.Exists(segmentPath))
@@ -54,7 +64,7 @@ public class DynamicHlsContentInterceptionFilter(IAdvancedTranscodeManager advan
         }
 
         // Second: check if any active transcode is close enough to produce this segment soon
-        if (playSessionId == null)
+        if (playSessionId == null && segmentId >= 0)
         {
             foreach (var job in candidateJobs)
             {
@@ -108,10 +118,12 @@ public class DynamicHlsContentInterceptionFilter(IAdvancedTranscodeManager advan
         ActionExecutingContext context,
         HttpRequest request,
         out int segmentId,
-        out string configKey)
+        out string configKey,
+        out string requestedSessionId)
     {
         segmentId = 0;
         configKey = string.Empty;
+        requestedSessionId = string.Empty;
 
         if (!context.RouteData.Values.TryGetValue("controller", out var c) || c is not "DynamicHls")
             return false;
@@ -128,19 +140,19 @@ public class DynamicHlsContentInterceptionFilter(IAdvancedTranscodeManager advan
 
         var playSessionIdStr = psObj?.ToString();
         if (playSessionIdStr is not "stream_generator_random"
-            && playSessionIdStr?.StartsWith(SessionPrefix, StringComparison.OrdinalIgnoreCase) != true)
+            && !IsStreamGeneratorSessionId(playSessionIdStr))
         {
             // Also check query string
-            if (!request.Query.TryGetValue("playSessionId", out var qps))
+            if (!request.Query.TryGetValue("playSessionId", out var qps) || qps.Count != 1)
                 return false;
             var qpsStr = qps.ToString();
             if (qpsStr is not "stream_generator_random"
-                && !qpsStr.StartsWith(SessionPrefix, StringComparison.OrdinalIgnoreCase))
+                && !IsStreamGeneratorSessionId(qpsStr))
                 return false;
+            playSessionIdStr = qpsStr;
         }
 
-        if (playSessionIdStr is not "stream_generator_random")
-            return false;
+        requestedSessionId = playSessionIdStr!;
 
         if (context.ActionArguments.TryGetValue("segmentId", out var segObj)
             && int.TryParse(segObj?.ToString(), out var sid))
@@ -152,20 +164,27 @@ public class DynamicHlsContentInterceptionFilter(IAdvancedTranscodeManager advan
         return true;
     }
 
-    private static string ComputeConfigKey(ActionExecutingContext context, HttpRequest request)
+    internal static string ComputeConfigKey(ActionExecutingContext context, HttpRequest request)
     {
         var itemId = context.RouteData.Values.TryGetValue("itemId", out var id) ? id?.ToString() : "";
-        var q = request.Query;
-        var input = string.Join("|",
-            itemId,
-            q["mediaSourceId"].ToString(),
-            q["videoCodec"].ToString(),
-            q["audioCodec"].ToString(),
-            q["audioStreamIndex"].ToString(),
-            q["subtitleStreamIndex"].ToString(),
-            q["subtitleMethod"].ToString(),
-            q["videoBitrate"].ToString(),
-            q["copyTimestamps"].ToString());
+        var excludedKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "api_key",
+            "ApiKey",
+            "deviceId",
+            "playSessionId",
+            "runtimeTicks",
+            "actualSegmentLengthTicks",
+        };
+        var parameters = QueryHelpers.ParseQuery(request.QueryString.Value)
+            .Where(parameter => !excludedKeys.Contains(parameter.Key)
+                                && !parameter.Key.Equals("segmentContainer", StringComparison.OrdinalIgnoreCase)
+                                && !parameter.Key.Equals("segmentLength", StringComparison.OrdinalIgnoreCase))
+            .Select(parameter => $"{parameter.Key.ToLowerInvariant()}={parameter.Value}")
+            .Order(StringComparer.Ordinal)
+            .Append($"segmentcontainer={GetSegmentContainer(context).TrimStart('.')}")
+            .Append($"segmentlength={GetSegmentLength(context).ToString(CultureInfo.InvariantCulture)}");
+        var input = $"{itemId}|{string.Join('|', parameters)}";
 
         var hashBytes = SHA256.HashData(Encoding.UTF8.GetBytes(input));
         return Convert.ToHexString(hashBytes)[..12].ToLowerInvariant();
@@ -187,11 +206,24 @@ public class DynamicHlsContentInterceptionFilter(IAdvancedTranscodeManager advan
         if (context.ActionArguments.TryGetValue("segmentContainer", out var containerObj)
             && containerObj?.ToString() is { Length: > 0 } container)
         {
-            return "." + container;
+            return "." + NormalizeContainer(container);
         }
 
         return ".ts";
     }
+
+    private static string NormalizeContainer(string container)
+        => container.Trim().TrimStart('.').ToLowerInvariant();
+
+    private static bool IsStreamGeneratorSessionId(string? sessionId)
+        => sessionId is not null && StreamGeneratorSessionRegex().IsMatch(sessionId);
+
+    private static bool IsSessionIdForPrefix(string sessionId, string prefix)
+        => IsStreamGeneratorSessionId(sessionId)
+           && sessionId.StartsWith(prefix, StringComparison.OrdinalIgnoreCase);
+
+    [GeneratedRegex("^sg_[0-9a-f]{12}_[0-9a-f]{8}$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex StreamGeneratorSessionRegex();
 
     private static int GetSegmentLength(ActionExecutingContext context)
     {
