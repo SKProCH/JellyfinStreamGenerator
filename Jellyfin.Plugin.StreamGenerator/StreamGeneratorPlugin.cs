@@ -6,7 +6,6 @@ using System.Reflection;
 using System.Runtime.Loader;
 using System.Text.RegularExpressions;
 using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 using Jellyfin.Plugin.StreamGenerator.Configuration;
 using Jellyfin.Plugin.StreamGenerator.Model;
 using MediaBrowser.Common.Configuration;
@@ -22,6 +21,8 @@ namespace Jellyfin.Plugin.StreamGenerator;
 /// </summary>
 public class StreamGeneratorPlugin : BasePlugin<PluginConfiguration>, IHasWebPages
 {
+    private const string WebFilePattern = @".*(?:main\.jellyfin\.bundle|\.chunk)\.js$";
+
     private readonly ILogger<StreamGeneratorPlugin> _logger;
 
     /// <summary>
@@ -100,22 +101,21 @@ public class StreamGeneratorPlugin : BasePlugin<PluginConfiguration>, IHasWebPag
         try
         {
             var ftAssembly = AssemblyLoadContext.All.SelectMany(x => x.Assemblies)
-                .FirstOrDefault(x => x.FullName?.Contains("FileTransformation") ?? false);
+                .FirstOrDefault(x => x.FullName?.Contains(".FileTransformation") ?? false);
 
             if (ftAssembly != null)
             {
-                var pluginType = ftAssembly.GetType("Jellyfin.Plugin.FileTransformation.PluginInterface");
-                if (pluginType != null)
+                if (TryRegisterFileTransformationDirectly(ftAssembly))
                 {
-                    var payload = new JObject();
-                    payload.Add("id", Id.ToString());
-                    payload.Add("fileNamePattern", ".*\\.chunk\\.js$");
-                    payload.Add("callbackAssembly", GetType().Assembly.FullName);
-                    payload.Add("callbackClass", typeof(StreamGeneratorPlugin).FullName);
-                    payload.Add("callbackMethod", nameof(PatchContextMenu));
-
-                    pluginType.GetMethod("RegisterTransformation")?.Invoke(null, new object[] { payload });
-                    _logger.LogInformation("Successfully registered FileTransformation for chunk.js via JObject.Add");
+                    _logger.LogInformation("Successfully registered FileTransformation for Jellyfin web bundles");
+                }
+                else if (TryRegisterFileTransformationViaPluginInterface(ftAssembly))
+                {
+                    _logger.LogInformation("Successfully registered FileTransformation through PluginInterface");
+                }
+                else
+                {
+                    _logger.LogWarning("FileTransformation plugin interface was found, but Stream Generator could not register a transformation");
                 }
             }
             else
@@ -129,6 +129,97 @@ public class StreamGeneratorPlugin : BasePlugin<PluginConfiguration>, IHasWebPag
         }
     }
 
+    private bool TryRegisterFileTransformationDirectly(Assembly ftAssembly)
+    {
+        try
+        {
+            var pluginType = ftAssembly.GetType("Jellyfin.Plugin.FileTransformation.FileTransformationPlugin");
+            var writeServiceType = ftAssembly.GetType("Jellyfin.Plugin.FileTransformation.Library.IWebFileTransformationWriteService");
+            var transformDelegateType = ftAssembly.GetType("Jellyfin.Plugin.FileTransformation.Library.TransformFile");
+            var transformMethod = typeof(StreamGeneratorPlugin).GetMethod(
+                nameof(TransformContextMenuFile),
+                BindingFlags.NonPublic | BindingFlags.Static);
+
+            if (pluginType == null || writeServiceType == null || transformDelegateType == null || transformMethod == null)
+            {
+                return false;
+            }
+
+            var pluginInstance = pluginType.GetProperty("Instance", BindingFlags.Public | BindingFlags.Static)?.GetValue(null);
+            var serviceProvider = pluginType.GetProperty("ServiceProvider")?.GetValue(pluginInstance) as IServiceProvider;
+            var writeService = serviceProvider?.GetService(writeServiceType);
+            var addTransformationMethod = writeServiceType.GetMethod("AddTransformation");
+
+            if (writeService == null || addTransformationMethod == null)
+            {
+                return false;
+            }
+
+            var transformDelegate = Delegate.CreateDelegate(transformDelegateType, transformMethod);
+            addTransformationMethod.Invoke(writeService, new object[] { Id, WebFilePattern, transformDelegate });
+
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Direct FileTransformation registration failed; falling back to PluginInterface");
+            return false;
+        }
+    }
+
+    private bool TryRegisterFileTransformationViaPluginInterface(Assembly ftAssembly)
+    {
+        try
+        {
+            var pluginType = ftAssembly.GetType("Jellyfin.Plugin.FileTransformation.PluginInterface");
+            var registerMethod = pluginType?.GetMethod("RegisterTransformation", BindingFlags.Public | BindingFlags.Static);
+            var payloadType = registerMethod?.GetParameters().SingleOrDefault()?.ParameterType;
+            var parseMethod = payloadType?.GetMethod(
+                "Parse",
+                BindingFlags.Public | BindingFlags.Static,
+                null,
+                new[] { typeof(string) },
+                null);
+
+            if (registerMethod == null || parseMethod == null)
+            {
+                return false;
+            }
+
+            var payloadJson = JsonConvert.SerializeObject(new
+            {
+                id = Id.ToString(),
+                fileNamePattern = WebFilePattern,
+                callbackAssembly = GetType().Assembly.FullName,
+                callbackClass = typeof(StreamGeneratorPlugin).FullName,
+                callbackMethod = nameof(PatchContextMenu)
+            });
+
+            var payload = parseMethod.Invoke(null, new object[] { payloadJson });
+            registerMethod.Invoke(null, new[] { payload });
+
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "PluginInterface FileTransformation registration failed");
+            return false;
+        }
+    }
+
+    private static async Task TransformContextMenuFile(string path, Stream contents)
+    {
+        using var reader = new StreamReader(contents, leaveOpen: true);
+        var currentContent = await reader.ReadToEndAsync().ConfigureAwait(false);
+        var transformedContent = PatchContextMenu(new PatchRequestPayload { Contents = currentContent });
+
+        contents.Seek(0, SeekOrigin.Begin);
+        contents.SetLength(0);
+
+        await using var writer = new StreamWriter(contents, leaveOpen: true);
+        await writer.WriteAsync(transformedContent).ConfigureAwait(false);
+    }
+
     /// <summary>
     /// This method is called by the FileTransformation plugin when itemContextMenu.js is requested.
     /// </summary>
@@ -140,15 +231,24 @@ public class StreamGeneratorPlugin : BasePlugin<PluginConfiguration>, IHasWebPag
 
         try
         {
-            var generateStreamObj = @",{name:""Generate Stream URL"",id:""generate-stream"",icon:""link""}";
+            var generateStreamObj = @"{name:""Generate Stream URL"",id:""generate-stream"",icon:""link""}";
 
-            // Make sure the replacement strings don't contain any newlines or indentation that breaks "use strict"; minified structure
-            // We append our object right after the "copy-stream" object, effectively passing it as a second argument to .push() or next element in an array.
+            // Keep the replacement minified so it does not break the web bundle's "use strict" structure.
+            // Copy Stream URL is only a placement landmark; our command is pushed separately after that block so hiding Jellyfin's default copy command with CSS will not hide Generate Stream URL.
             var regexContext = Regex.Replace(
                 payload.Contents,
-                @"(id:""copy-stream"",icon:""content_copy""\})",
-                $"$1{generateStreamObj}"
+                @"(id:""copy-stream"",icon:""content_copy""\}\)\)\),)",
+                $"${{1}}c&&\"Photo\"!==i.MediaType&&d.push({generateStreamObj}),"
             );
+
+            if (regexContext == payload.Contents)
+            {
+                regexContext = Regex.Replace(
+                    payload.Contents,
+                    @"(id:""copy-stream"",icon:""content_copy""\})",
+                    $"${{1}},{generateStreamObj}"
+                );
+            }
 
             var generateStreamCase = @"case""generate-stream"":if(window.showStreamGeneratorPopup){window.showStreamGeneratorPopup(c,u)}else{console.error(""StreamGenerator popup script not loaded!"")}try{k(l,t)()}catch(e){console.error(""StreamGenerator: Error calling getResolveFunction"",e)}break;";
 
