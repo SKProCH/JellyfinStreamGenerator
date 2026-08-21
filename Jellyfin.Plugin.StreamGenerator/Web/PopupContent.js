@@ -254,6 +254,13 @@ var showStreamGeneratorPopup = function (itemId, serverId) {
         html += '<input type="checkbox" id="copyTimestamps" style="margin-right: 8px;" checked />';
         html += '<span>Copy Timestamps</span>';
         html += '</label>';
+
+        if (settings.GenerateCustomApiTokens) {
+            html += '<label style="display: flex; align-items: center; margin-top: 15px; cursor: pointer;">';
+            html += '<input type="checkbox" id="rememberPlaybackProgress" style="margin-right: 8px;"' + (settings.RememberPlaybackProgressByDefault !== false ? ' checked' : '') + ' />';
+            html += '<span>Remember playback progress</span>';
+            html += '</label>';
+        }
         html += '</details>';
 
         const btnStyle = 'padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; margin-left: 10px;';
@@ -369,29 +376,31 @@ var showStreamGeneratorPopup = function (itemId, serverId) {
                 }
             };
 
-            apiClient.getJSON(apiClient.getUrl('StreamGenerator/Settings')).then(function (settings) {
-                if (settings.GenerateCustomApiTokens) {
-                    const selectedDuration = modal.querySelector('#tokenDurationHours').value;
-                    const queryObj = { itemId: itemId };
-                    if (selectedDuration !== '') {
-                        queryObj.durationHours = selectedDuration;
-                    }
-
-                    apiClient.fetch({
-                        type: 'POST',
-                        url: apiClient.getUrl('StreamGenerator/GenerateToken', queryObj),
-                        dataType: 'text'
-                    }).then(function (token) {
-                        // ASP.NET Core returns strings as JSON strings (with quotes), so we must strip them
-                        const cleanToken = token.replace(/^"|"$/g, '');
-                        buildUrl(cleanToken);
-                    }).catch(function () {
-                        buildUrl(apiClient.accessToken());
-                    });
-                } else {
-                    buildUrl(apiClient.accessToken());
+            if (settings.GenerateCustomApiTokens) {
+                const selectedDuration = modal.querySelector('#tokenDurationHours').value;
+                const progressCheckbox = modal.querySelector('#rememberPlaybackProgress');
+                const queryObj = {
+                    itemId: itemId,
+                    rememberPlaybackProgress: progressCheckbox ? progressCheckbox.checked : settings.RememberPlaybackProgressByDefault !== false
+                };
+                if (selectedDuration !== '') {
+                    queryObj.durationHours = selectedDuration;
                 }
-            });
+
+                apiClient.fetch({
+                    type: 'POST',
+                    url: apiClient.getUrl('StreamGenerator/GenerateToken', queryObj),
+                    dataType: 'text'
+                }).then(function (token) {
+                    // ASP.NET Core returns strings as JSON strings (with quotes), so we must strip them
+                    const cleanToken = token.replace(/^"|"$/g, '');
+                    buildUrl(cleanToken);
+                }).catch(function () {
+                    buildUrl(apiClient.accessToken());
+                });
+            } else {
+                buildUrl(apiClient.accessToken());
+            }
         });
     });
 };

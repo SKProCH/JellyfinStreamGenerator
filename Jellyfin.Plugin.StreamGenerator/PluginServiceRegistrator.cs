@@ -1,5 +1,6 @@
 ﻿using Jellyfin.Plugin.StreamGenerator.Decorators;
 using Jellyfin.Plugin.StreamGenerator.Configuration;
+using Jellyfin.Plugin.StreamGenerator.Progress;
 using MediaBrowser.Controller;
 using MediaBrowser.Controller.MediaEncoding;
 using MediaBrowser.Controller.Net;
@@ -16,6 +17,7 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
         serviceCollection.AddSingleton<IStreamGeneratorConfigurationAccessor, StreamGeneratorConfigurationAccessor>();
         serviceCollection.Decorate<IAuthorizationContext, CustomStreamTokensAuthorizationContext>();
         serviceCollection.AddSingleton<IAdvancedTranscodeManager, AdvancedTranscodeManager>();
+        serviceCollection.AddSingleton<IPlaybackProgressTracker, PlaybackProgressTracker>();
         serviceCollection.Configure<MvcOptions>(opts => opts.Filters.Add<DynamicHlsContentInterceptionFilter>());  
         serviceCollection.AddSingleton<DynamicHlsContentInterceptionFilter>(); 
     }

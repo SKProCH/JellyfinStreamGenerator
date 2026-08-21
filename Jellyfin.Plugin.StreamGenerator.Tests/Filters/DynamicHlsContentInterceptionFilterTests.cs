@@ -5,9 +5,12 @@ using Microsoft.AspNetCore.Mvc.Abstractions;
 using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.Primitives;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
+using Jellyfin.Plugin.StreamGenerator.Progress;
 
 namespace Jellyfin.Plugin.StreamGenerator.Tests.Filters;
 
@@ -103,6 +106,53 @@ public class DynamicHlsContentInterceptionFilterTests
     }
 
     [Fact]
+    public async Task SuccessfulResponse_TracksOnlyAfterResponseCompletes()
+    {
+        var observation = new SegmentProgressObservation(Guid.NewGuid(), ItemId, 60_000_000);
+        var fixture = CreateFixture();
+        fixture.ProgressTracker
+            .Setup(x => x.CreateObservationAsync(fixture.Context))
+            .ReturnsAsync(observation);
+
+        await fixture.Subject.OnActionExecutionAsync(fixture.Context, fixture.Next);
+
+        fixture.ProgressTracker.Verify(x => x.Track(It.IsAny<SegmentProgressObservation>()), Times.Never);
+
+        await fixture.ResponseFeature.CompleteAsync();
+
+        fixture.ProgressTracker.Verify(x => x.Track(observation), Times.Once);
+    }
+
+    [Fact]
+    public async Task FailedResponse_DoesNotTrackAfterResponseCompletes()
+    {
+        var observation = new SegmentProgressObservation(Guid.NewGuid(), ItemId, 60_000_000);
+        var fixture = CreateFixture();
+        fixture.ProgressTracker
+            .Setup(x => x.CreateObservationAsync(fixture.Context))
+            .ReturnsAsync(observation);
+        fixture.Context.HttpContext.Response.StatusCode = StatusCodes.Status500InternalServerError;
+
+        await fixture.Subject.OnActionExecutionAsync(fixture.Context, fixture.Next);
+        await fixture.ResponseFeature.CompleteAsync();
+
+        fixture.ProgressTracker.Verify(x => x.Track(It.IsAny<SegmentProgressObservation>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ObservationFailure_DoesNotPreventSegmentAction()
+    {
+        var fixture = CreateFixture();
+        fixture.ProgressTracker
+            .Setup(x => x.CreateObservationAsync(fixture.Context))
+            .ThrowsAsync(new InvalidOperationException("tracking failed"));
+
+        await fixture.Subject.OnActionExecutionAsync(fixture.Context, fixture.Next);
+
+        fixture.NextCalls.Should().Be(1);
+    }
+
+    [Fact]
     public void ConfigKey_TsAndFmp4AreDifferent()
     {
         var ts = CreateFixture(query: "?mediaSourceId=source&segmentContainer=ts&segmentLength=6");
@@ -193,6 +243,8 @@ public class DynamicHlsContentInterceptionFilterTests
         bool includeSegmentArguments = true)
     {
         var httpContext = new DefaultHttpContext();
+        var responseFeature = new TestHttpResponseFeature();
+        httpContext.Features.Set<IHttpResponseFeature>(responseFeature);
         httpContext.Request.QueryString = new QueryString(query);
         var routeData = new RouteData();
         routeData.Values["controller"] = controller;
@@ -219,10 +271,14 @@ public class DynamicHlsContentInterceptionFilterTests
         var context = new ActionExecutingContext(actionContext, [], arguments, new object());
         var manager = new Mock<IAdvancedTranscodeManager>();
         manager.Setup(x => x.GetActiveTranscodingJobs()).Returns([]);
+        var progressTracker = new Mock<IPlaybackProgressTracker>();
+        progressTracker.Setup(x => x.CreateObservationAsync(It.IsAny<ActionExecutingContext>()))
+            .ReturnsAsync((SegmentProgressObservation?)null);
         var subject = new DynamicHlsContentInterceptionFilter(
             manager.Object,
+            progressTracker.Object,
             NullLogger<DynamicHlsContentInterceptionFilter>.Instance);
-        var fixture = new Fixture(subject, context, manager);
+        var fixture = new Fixture(subject, context, manager, progressTracker, responseFeature);
         fixture.Next = () =>
         {
             fixture.NextCalls++;
@@ -242,13 +298,43 @@ public class DynamicHlsContentInterceptionFilterTests
     private sealed class Fixture(
         DynamicHlsContentInterceptionFilter subject,
         ActionExecutingContext context,
-        Mock<IAdvancedTranscodeManager> manager)
+        Mock<IAdvancedTranscodeManager> manager,
+        Mock<IPlaybackProgressTracker> progressTracker,
+        TestHttpResponseFeature responseFeature)
     {
         public DynamicHlsContentInterceptionFilter Subject { get; } = subject;
         public ActionExecutingContext Context { get; } = context;
         public Mock<IAdvancedTranscodeManager> Manager { get; } = manager;
+        public Mock<IPlaybackProgressTracker> ProgressTracker { get; } = progressTracker;
+        public TestHttpResponseFeature ResponseFeature { get; } = responseFeature;
         public ActionExecutionDelegate Next { get; set; } = null!;
         public int NextCalls { get; set; }
+    }
+
+    private sealed class TestHttpResponseFeature : IHttpResponseFeature
+    {
+        private readonly List<(Func<object, Task> Callback, object State)> _completedCallbacks = [];
+
+        public int StatusCode { get; set; } = StatusCodes.Status200OK;
+        public string? ReasonPhrase { get; set; }
+        public IHeaderDictionary Headers { get; set; } = new HeaderDictionary();
+        public Stream Body { get; set; } = Stream.Null;
+        public bool HasStarted => false;
+
+        public void OnStarting(Func<object, Task> callback, object state)
+        {
+        }
+
+        public void OnCompleted(Func<object, Task> callback, object state)
+            => _completedCallbacks.Add((callback, state));
+
+        public async Task CompleteAsync()
+        {
+            foreach (var (callback, state) in _completedCallbacks.AsEnumerable().Reverse())
+            {
+                await callback(state);
+            }
+        }
     }
 
     private sealed class TemporaryDirectory : IDisposable

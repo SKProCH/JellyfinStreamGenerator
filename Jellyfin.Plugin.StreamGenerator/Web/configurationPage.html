@@ -21,6 +21,16 @@
                     <div class="fieldDescription">Leave empty for infinite.</div>
                 </div>
 
+                <div class="checkboxContainer checkboxContainer-withDescription">
+                    <label class="emby-checkbox-label">
+                        <input is="emby-checkbox" type="checkbox" id="chkRememberPlaybackProgress" />
+                        <span>Remember playback progress by default</span>
+                    </label>
+                    <div class="fieldDescription">
+                        Sets the default for newly generated links. Users can disable it for an individual link.
+                    </div>
+                </div>
+
                 <div class="inputContainer">
                     <label class="inputLabel" for="txtMaxDuration">Max token duration (hours):</label>
                     <input is="emby-input" type="number" id="txtMaxDuration" step="any" min="0" class="emby-input" />
@@ -103,7 +113,8 @@
                                 '<div class="listItemBodyText" style="font-weight: 500;">' + (token.ItemName || 'Unknown Item') + '</div>' +
                                 '<div class="listItemBodyText secondary" style="margin-top: 4px;">' +
                                     'User: ' + (token.UserName || 'Unknown') + ' | ' +
-                                    'Expires: ' + expiresDate + expiredStr +
+                                    'Expires: ' + expiresDate + expiredStr + ' | ' +
+                                    'Progress: ' + (token.RememberPlaybackProgress ? 'Enabled' : 'Disabled') +
                                 '</div>' +
                                 '<div class="listItemBodyText secondary" style="font-family: monospace; font-size: 0.9em; margin-top: 2px;">' +
                                     'Token: ' + token.Token +
@@ -183,6 +194,7 @@
                 Dashboard.showLoadingMsg();
                 ApiClient.getPluginConfiguration(pluginId).then(function (config) {
                     page.querySelector('#chkIsEnabled').checked = config.GenerateCustomApiTokens !== false;
+                    page.querySelector('#chkRememberPlaybackProgress').checked = config.RememberPlaybackProgressByDefault !== false;
                     page.querySelector('#txtDefaultDuration').value = config.DefaultCustomTokenDurationHours !== null ? config.DefaultCustomTokenDurationHours : '';
                     page.querySelector('#txtMaxDuration').value = config.MaxCustomTokenDurationHours !== null ? config.MaxCustomTokenDurationHours : '';
                     Dashboard.hideLoadingMsg();
@@ -232,6 +244,7 @@
                     Dashboard.showLoadingMsg();
                     ApiClient.getPluginConfiguration(pluginId).then(function (config) {
                         config.GenerateCustomApiTokens = page.querySelector('#chkIsEnabled').checked;
+                        config.RememberPlaybackProgressByDefault = page.querySelector('#chkRememberPlaybackProgress').checked;
 
                         const defDur = page.querySelector('#txtDefaultDuration').value;
                         config.DefaultCustomTokenDurationHours = defDur ? parseFloat(defDur) : null;

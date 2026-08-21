@@ -16,6 +16,7 @@ public class StreamTokenControllerTests
         var configuration = new PluginConfiguration
         {
             GenerateCustomApiTokens = false,
+            RememberPlaybackProgressByDefault = false,
             DefaultCustomTokenDurationHours = 12,
             MaxCustomTokenDurationHours = 24,
         };
@@ -25,6 +26,7 @@ public class StreamTokenControllerTests
         var settings = result.Value.Should().BeOfType<PluginSettings>().Subject;
 
         settings.GenerateCustomApiTokens.Should().BeFalse();
+        settings.RememberPlaybackProgressByDefault.Should().BeFalse();
         settings.DefaultTokenDurationHours.Should().Be(12);
         settings.MaxTokenDurationHours.Should().Be(24);
     }
@@ -55,7 +57,20 @@ public class StreamTokenControllerTests
         configuration.StreamTokens[token].UserId.Should().Be(userId);
         configuration.StreamTokens[token].ItemId.Should().Be(itemId.ToString("N"));
         configuration.StreamTokens[token].Duration.Should().Be(TimeSpan.FromHours(24));
+        configuration.StreamTokens[token].RememberPlaybackProgress.Should().BeTrue();
         fixture.Accessor.Verify(x => x.Save(), Times.Once);
+    }
+
+    [Fact]
+    public async Task GenerateToken_ExplicitProgressSettingOverridesDefault()
+    {
+        var configuration = new PluginConfiguration { RememberPlaybackProgressByDefault = true };
+        var fixture = CreateFixture(configuration, Guid.NewGuid());
+
+        var action = await fixture.Subject.GenerateToken(Guid.NewGuid().ToString("N"), rememberPlaybackProgress: false);
+        var token = action.Result.Should().BeOfType<OkObjectResult>().Which.Value.Should().BeOfType<string>().Subject;
+
+        configuration.StreamTokens[token].RememberPlaybackProgress.Should().BeFalse();
     }
 
     [Fact]

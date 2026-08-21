@@ -10,6 +10,7 @@ public class ConfigurationTests
         var configuration = new PluginConfiguration();
 
         configuration.GenerateCustomApiTokens.Should().BeTrue();
+        configuration.RememberPlaybackProgressByDefault.Should().BeTrue();
         configuration.DefaultCustomTokenDurationHours.Should().BeNull();
         configuration.MaxCustomTokenDurationHours.Should().BeNull();
         configuration.StreamTokens.Should().BeEmpty();

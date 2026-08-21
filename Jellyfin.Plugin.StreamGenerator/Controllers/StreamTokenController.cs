@@ -27,6 +27,7 @@ public class StreamTokenController(
         return Ok(new PluginSettings
         {
             GenerateCustomApiTokens = config.GenerateCustomApiTokens,
+            RememberPlaybackProgressByDefault = config.RememberPlaybackProgressByDefault,
             DefaultTokenDurationHours = config.DefaultCustomTokenDurationHours,
             MaxTokenDurationHours = config.MaxCustomTokenDurationHours
         });
@@ -65,7 +66,8 @@ public class StreamTokenController(
                 UserName = user?.Username ?? "Unknown User",
                 CreatedAt = tokenInfo.CreatedAt,
                 ExpiresAt = tokenInfo.CreatedAt + tokenInfo.Duration,
-                IsExpired = tokenInfo.IsExpired()
+                IsExpired = tokenInfo.IsExpired(),
+                RememberPlaybackProgress = tokenInfo.RememberPlaybackProgress,
             });
         }
 
@@ -125,7 +127,10 @@ public class StreamTokenController(
 
     [HttpPost("GenerateToken")]
     [Authorize]
-    public async Task<ActionResult<string>> GenerateToken([FromQuery] string itemId, [FromQuery] double? durationHours = null)
+    public async Task<ActionResult<string>> GenerateToken(
+        [FromQuery] string itemId,
+        [FromQuery] double? durationHours = null,
+        [FromQuery] bool? rememberPlaybackProgress = null)
     {
         var config = configurationAccessor.Configuration;
         if (config is null)
@@ -149,6 +154,7 @@ public class StreamTokenController(
             UserId = authInfo.UserId,
             ItemId = itemId,
             Duration = finalDurationHours.HasValue ? TimeSpan.FromHours(finalDurationHours.Value) : null,
+            RememberPlaybackProgress = rememberPlaybackProgress ?? config.RememberPlaybackProgressByDefault,
             CreatedAt = DateTimeOffset.UtcNow,
         };
         configurationAccessor.Save();
@@ -160,6 +166,7 @@ public class StreamTokenController(
 public sealed class PluginSettings
 {
     public bool GenerateCustomApiTokens { get; set; }
+    public bool RememberPlaybackProgressByDefault { get; set; }
     public double? DefaultTokenDurationHours { get; set; }
     public double? MaxTokenDurationHours { get; set; }
 }
@@ -174,4 +181,5 @@ public sealed class StreamTokenDto
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset? ExpiresAt { get; set; }
     public bool IsExpired { get; set; }
+    public bool RememberPlaybackProgress { get; set; }
 }

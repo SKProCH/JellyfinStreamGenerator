@@ -2,7 +2,9 @@ using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
+using Jellyfin.Plugin.StreamGenerator.Progress;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc.Infrastructure;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Logging;
@@ -10,7 +12,10 @@ using Microsoft.Extensions.Primitives;
 
 namespace Jellyfin.Plugin.StreamGenerator;
 
-public partial class DynamicHlsContentInterceptionFilter(IAdvancedTranscodeManager advancedTranscodeManager, ILogger<DynamicHlsContentInterceptionFilter> logger) : IAsyncActionFilter
+public partial class DynamicHlsContentInterceptionFilter(
+    IAdvancedTranscodeManager advancedTranscodeManager,
+    IPlaybackProgressTracker playbackProgressTracker,
+    ILogger<DynamicHlsContentInterceptionFilter> logger) : IAsyncActionFilter
 {
     private const string SessionPrefix = "sg_";
 
@@ -25,6 +30,15 @@ public partial class DynamicHlsContentInterceptionFilter(IAdvancedTranscodeManag
         }
 
         request.Headers["User-Agent"] = "StreamGenerator/1.0";
+        SegmentProgressObservation? progressObservation = null;
+        try
+        {
+            progressObservation = await playbackProgressTracker.CreateObservationAsync(context).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to prepare generated-link playback progress tracking");
+        }
 
         var prefix = $"{SessionPrefix}{configKey}_";
 
@@ -111,7 +125,22 @@ public partial class DynamicHlsContentInterceptionFilter(IAdvancedTranscodeManag
         queryDict["deviceId"] = new StringValues(deviceId);
         request.QueryString = QueryString.Create(queryDict);
 
-        await next();
+        var executedContext = await next();
+        if (progressObservation.HasValue && WasSuccessful(executedContext))
+        {
+            var response = context.HttpContext.Response;
+            var requestAborted = context.HttpContext.RequestAborted;
+            response.OnCompleted(() =>
+            {
+                if (response.StatusCode is >= StatusCodes.Status200OK and < StatusCodes.Status300MultipleChoices
+                    && !requestAborted.IsCancellationRequested)
+                {
+                    playbackProgressTracker.Track(progressObservation.Value);
+                }
+
+                return Task.CompletedTask;
+            });
+        }
     }
 
     private static bool TryParseStreamGeneratorSegmentRequest(
@@ -224,6 +253,17 @@ public partial class DynamicHlsContentInterceptionFilter(IAdvancedTranscodeManag
 
     [GeneratedRegex("^sg_[0-9a-f]{12}_[0-9a-f]{8}$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex StreamGeneratorSessionRegex();
+
+    private static bool WasSuccessful(ActionExecutedContext context)
+    {
+        if (context.Canceled || context.Exception is not null && !context.ExceptionHandled)
+        {
+            return false;
+        }
+
+        return context.Result is not IStatusCodeActionResult { StatusCode: int statusCode }
+               || statusCode is >= StatusCodes.Status200OK and < StatusCodes.Status300MultipleChoices;
+    }
 
     private static int GetSegmentLength(ActionExecutingContext context)
     {
