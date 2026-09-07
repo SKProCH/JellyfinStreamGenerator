@@ -85,10 +85,17 @@ var showStreamGeneratorPopup = function (itemId, serverId) {
         const videoCodecs = getFilteredCodecs(sourceVideoCodecs, encodingOptions.TranscodingVideoCodecs || [], ['h264', 'hevc', 'av1', 'vp9'], 'h264');
         const videoCodecsHtml = generateCodecCheckboxesHtml(videoCodecs, 'videoCodec', checkboxLabelStyle);
 
-        let maxBitrate = 140000000; // Default large number (140 Mbps)
-        if (mediaSource.Bitrate) {
-            maxBitrate = mediaSource.Bitrate;
-        }
+        const videoStream = (mediaSource.MediaStreams || []).find(s => s.Type === 'Video');
+        const hasVideoBitrate = Number.isFinite(videoStream?.BitRate) && videoStream.BitRate > 0;
+        const maxBitrate = hasVideoBitrate ? videoStream.BitRate : 140000000;
+        const formatBitrate = function (bitrate) {
+            if (bitrate >= 1000000) {
+                const mbps = bitrate / 1000000;
+                return mbps.toFixed(mbps % 1 === 0 ? 0 : 2) + ' Mbps';
+            }
+
+            return Math.round(bitrate / 1000) + ' Kbps';
+        };
 
         /* Prepare Audio and Subtitle Options */
         let audioOptions = '<option value="">Default</option>';
@@ -174,8 +181,11 @@ var showStreamGeneratorPopup = function (itemId, serverId) {
         html += '<label style="' + checkboxLabelStyle + '"><input type="checkbox" name="audioCodec" value="flac" checked style="margin-right: 5px;">FLAC</label>';
         html += '</div>';
 
-        const maxBitrateMbps = Math.max(1, Math.ceil(maxBitrate / 1000000));
-        const sliderMax = Math.max(140, maxBitrateMbps); // Ensure slider can reach the item's bitrate if it's > 140
+        const minBitrate = 1000000;
+        const bitrateStep = Math.max(100000, Math.ceil(maxBitrate / 100 / 100000) * 100000);
+        const maxSelectableBitrate = Math.max(minBitrate, Math.ceil(maxBitrate / bitrateStep) * bitrateStep);
+        const sliderMax = maxSelectableBitrate + bitrateStep;
+        const keepOriginalLabel = hasVideoBitrate ? 'Keep original (' + formatBitrate(videoStream.BitRate) + ')' : 'Keep original';
 
         html += '<label>Audio Stream<br>';
         html += '<select id="audioStreamIndex" style="' + selectStyle + '">';
@@ -247,8 +257,10 @@ var showStreamGeneratorPopup = function (itemId, serverId) {
         html += durationOptionsHtml;
         html += '</select></label>';
 
-        html += '<label style="display: block; margin-top: 15px;">Max Video Bitrate: <span id="bitrateDisplay">' + sliderMax + '</span> Mbps<br>';
-        html += '<input type="range" id="maxVideoBitrate" style="' + selectStyle + ' cursor: pointer; margin-bottom: 0;" min="1" max="' + sliderMax + '" value="' + sliderMax + '"></label>';
+        html += '<label style="display: block; margin-top: 15px;">Max Video Bitrate: <span id="bitrateDisplay">' + keepOriginalLabel + '</span><br>';
+        html += '<div style="display: flex; align-items: center; gap: 8px;">';
+        html += '<input type="range" id="maxVideoBitrate" style="' + selectStyle + ' cursor: pointer; margin-bottom: 0; flex: 1;" min="' + minBitrate + '" max="' + sliderMax + '" step="' + bitrateStep + '" value="' + sliderMax + '">';
+        html += '</div></label>';
 
         html += '<label style="display: flex; align-items: center; margin-top: 15px; cursor: pointer;">';
         html += '<input type="checkbox" id="copyTimestamps" style="margin-right: 8px;" checked />';
@@ -297,7 +309,10 @@ var showStreamGeneratorPopup = function (itemId, serverId) {
 
         /* Handle Bitrate Slider Update */
         modal.querySelector('#maxVideoBitrate').addEventListener('input', function (e) {
-            modal.querySelector('#bitrateDisplay').textContent = e.target.value;
+            const value = parseInt(e.target.value, 10);
+            modal.querySelector('#bitrateDisplay').textContent = value === sliderMax
+                ? keepOriginalLabel
+                : formatBitrate(value);
         });
 
         /* Close on overlay click */
@@ -322,10 +337,10 @@ var showStreamGeneratorPopup = function (itemId, serverId) {
             const subtitleStreamIndex = modal.querySelector('#subtitleStreamIndex').value;
             const subtitleMethod = modal.querySelector('#subtitleMethod').value;
             const copyTimestamps = modal.querySelector('#copyTimestamps').checked;
-            const maxVideoBitrate = parseInt(modal.querySelector('#maxVideoBitrate').value, 10) * 1000000;
+            const selectedBitrate = parseInt(modal.querySelector('#maxVideoBitrate').value, 10);
+            const maxVideoBitrate = selectedBitrate === sliderMax ? null : selectedBitrate;
 
             const serverUrl = apiClient.serverAddress();
-            const deviceId = apiClient.deviceId();
 
             const buildUrl = function (apiKey) {
                 const queryParams = new URLSearchParams({
@@ -337,10 +352,10 @@ var showStreamGeneratorPopup = function (itemId, serverId) {
                     enableAutoStreamCopy: true,
                     allowVideoStreamCopy: true,
                     allowAudioStreamCopy: true,
-                    copyTimestamps: copyTimestamps,
-                    videoBitrate: maxVideoBitrate
-                });
+                     copyTimestamps: copyTimestamps
+                 });
 
+                 if (maxVideoBitrate !== null) queryParams.append('videoBitrate', maxVideoBitrate);
                 if (videoCodecsStr) queryParams.append('videoCodec', videoCodecsStr);
                 if (audioCodecsStr) queryParams.append('audioCodec', audioCodecsStr);
                 if (audioStreamIndex !== '') queryParams.append('audioStreamIndex', audioStreamIndex);
