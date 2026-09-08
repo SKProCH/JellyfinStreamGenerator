@@ -69,8 +69,9 @@ var showStreamGeneratorPopup = function (itemId, serverId) {
         apiClient.getJSON(apiClient.getUrl('Encoding/PublicOptions')).catch(() => ({
             TranscodingVideoCodecs: ['h264']
         })),
-        apiClient.getJSON(apiClient.getUrl('StreamGenerator/Settings')).catch(() => ({}))
-    ]).then(([item, encodingOptions, settings]) => {
+        apiClient.getJSON(apiClient.getUrl('StreamGenerator/Settings')).catch(() => ({})),
+        apiClient.getJSON(apiClient.getUrl('Users/' + apiClient.getCurrentUserId())).catch(() => ({}))
+    ]).then(([item, encodingOptions, settings, user]) => {
         if (!item || !item.MediaSources || item.MediaSources.length === 0) {
             showToast("Cannot get media sources for this item.");
             return;
@@ -99,7 +100,8 @@ var showStreamGeneratorPopup = function (itemId, serverId) {
 
         /* Prepare Audio and Subtitle Options */
         let audioOptions = '<option value="">Default</option>';
-        let subtitleOptions = '<option value="">None / Default</option>';
+        let subtitleOptions = '';
+        const subtitleStreams = [];
 
         if (mediaSource.MediaStreams) {
             mediaSource.MediaStreams.forEach(stream => {
@@ -126,10 +128,60 @@ var showStreamGeneratorPopup = function (itemId, serverId) {
                     let forcedStr = stream.IsForced && !name.toLowerCase().includes('forced') ? " (Forced)" : "";
                     let defaultStr = stream.IsDefault && !name.toLowerCase().includes('default') ? " (Default)" : "";
 
-                    subtitleOptions += '<option value="' + stream.Index + '">' + name + codecStr + typeStr + forcedStr + defaultStr + '</option>';
+                    subtitleStreams.push({
+                        stream: stream,
+                        label: name + codecStr + typeStr + forcedStr + defaultStr
+                    });
                 }
             });
         }
+
+        const userConfiguration = user.Configuration || {};
+        const preferredSubtitleLanguages = (userConfiguration.SubtitleLanguagePreference || '')
+            .split(',')
+            .map(language => language.trim().toLowerCase())
+            .filter(Boolean);
+        const forcedSubtitleStreams = subtitleStreams.filter(entry => entry.stream.IsForced);
+        const languageMatches = function (stream, language) {
+            return Boolean(language && stream.Language && stream.Language.toLowerCase() === language);
+        };
+        const findAutoSubtitle = function (audioStreamIndex) {
+            const selectedAudioStream = (mediaSource.MediaStreams || []).find(stream =>
+                stream.Type === 'Audio' && stream.Index === audioStreamIndex
+            ) || (mediaSource.MediaStreams || []).find(stream => stream.Type === 'Audio');
+            const selectedAudioLanguage = selectedAudioStream?.Language?.toLowerCase();
+
+            return forcedSubtitleStreams
+                .slice()
+                .sort((left, right) => {
+                    const leftStream = left.stream;
+                    const rightStream = right.stream;
+                    const leftAudioLanguage = languageMatches(leftStream, selectedAudioLanguage) ? 1 : 0;
+                    const rightAudioLanguage = languageMatches(rightStream, selectedAudioLanguage) ? 1 : 0;
+                    if (leftAudioLanguage !== rightAudioLanguage) return rightAudioLanguage - leftAudioLanguage;
+
+                    const leftPreferredLanguage = preferredSubtitleLanguages.some(language => languageMatches(leftStream, language)) ? 1 : 0;
+                    const rightPreferredLanguage = preferredSubtitleLanguages.some(language => languageMatches(rightStream, language)) ? 1 : 0;
+                    if (leftPreferredLanguage !== rightPreferredLanguage) return rightPreferredLanguage - leftPreferredLanguage;
+                    if (leftStream.IsDefault !== rightStream.IsDefault) return rightStream.IsDefault ? 1 : -1;
+                    if (leftStream.IsExternal !== rightStream.IsExternal) return rightStream.IsExternal ? 1 : -1;
+                    return leftStream.Index - rightStream.Index;
+                })[0];
+        };
+
+        const getAutoLabel = function (autoSubtitle) {
+            return autoSubtitle
+                ? 'Auto (' + autoSubtitle.label + (forcedSubtitleStreams.length > 1 ? ', 1 of ' + forcedSubtitleStreams.length : '') + ')'
+                : 'Auto (No subtitles)';
+        };
+        let autoSubtitle = findAutoSubtitle(mediaSource.DefaultAudioStreamIndex);
+        let autoSubtitleStreamIndex = autoSubtitle ? autoSubtitle.stream.Index : null;
+        const defaultSubtitleMethod = autoSubtitle ? 'Encode' : 'Hls';
+        subtitleOptions += '<option value="auto" selected>' + getAutoLabel(autoSubtitle) + '</option>';
+        subtitleOptions += '<option value="-1">None</option>';
+        subtitleStreams.forEach(entry => {
+            subtitleOptions += '<option value="' + entry.stream.Index + '">' + entry.label + '</option>';
+        });
 
         /* Create Overlay */
         const overlay = document.createElement('div');
@@ -243,8 +295,8 @@ var showStreamGeneratorPopup = function (itemId, serverId) {
 
         html += '<label>Subtitle Method<br>';
         html += '<select id="subtitleMethod" style="' + selectStyle + '">';
-        html += '<option value="Hls" selected>HLS</option>';
-        html += '<option value="Encode">Burn In (Encode)</option>';
+        html += '<option value="Hls"' + (defaultSubtitleMethod === 'Hls' ? ' selected' : '') + '>HLS</option>';
+        html += '<option value="Encode"' + (defaultSubtitleMethod === 'Encode' ? ' selected' : '') + '>Burn In (Encode)</option>';
         html += '<option value="Embed">Embed</option>';
         html += '<option value="Drop">Drop</option>';
         html += '</select></label>';
@@ -315,6 +367,27 @@ var showStreamGeneratorPopup = function (itemId, serverId) {
                 : formatBitrate(value);
         });
 
+        modal.querySelector('#audioStreamIndex').addEventListener('change', function (e) {
+            const selectedAudioIndex = e.target.value === ''
+                ? mediaSource.DefaultAudioStreamIndex
+                : Number.parseInt(e.target.value, 10);
+            autoSubtitle = findAutoSubtitle(selectedAudioIndex);
+            autoSubtitleStreamIndex = autoSubtitle ? autoSubtitle.stream.Index : null;
+            modal.querySelector('#subtitleStreamIndex option[value="auto"]').textContent = getAutoLabel(autoSubtitle);
+
+            if (modal.querySelector('#subtitleStreamIndex').value === 'auto') {
+                modal.querySelector('#subtitleMethod').value = autoSubtitle ? 'Encode' : 'Drop';
+            }
+        });
+
+        modal.querySelector('#subtitleStreamIndex').addEventListener('change', function (e) {
+            if (e.target.value === 'auto') {
+                modal.querySelector('#subtitleMethod').value = autoSubtitleStreamIndex === null ? 'Drop' : 'Encode';
+            } else if (e.target.value === '-1') {
+                modal.querySelector('#subtitleMethod').value = 'Drop';
+            }
+        });
+
         /* Close on overlay click */
         overlay.addEventListener('click', function (e) {
             if (e.target === overlay) closePopup();
@@ -334,7 +407,7 @@ var showStreamGeneratorPopup = function (itemId, serverId) {
             const audioCodecsStr = audioCodecCheckboxes.join(',');
 
             const audioStreamIndex = modal.querySelector('#audioStreamIndex').value;
-            const subtitleStreamIndex = modal.querySelector('#subtitleStreamIndex').value;
+            const subtitleSelection = modal.querySelector('#subtitleStreamIndex').value;
             const subtitleMethod = modal.querySelector('#subtitleMethod').value;
             const copyTimestamps = modal.querySelector('#copyTimestamps').checked;
             const selectedBitrate = parseInt(modal.querySelector('#maxVideoBitrate').value, 10);
@@ -359,9 +432,16 @@ var showStreamGeneratorPopup = function (itemId, serverId) {
                 if (videoCodecsStr) queryParams.append('videoCodec', videoCodecsStr);
                 if (audioCodecsStr) queryParams.append('audioCodec', audioCodecsStr);
                 if (audioStreamIndex !== '') queryParams.append('audioStreamIndex', audioStreamIndex);
-                if (subtitleStreamIndex !== '') {
-                    queryParams.append('subtitleStreamIndex', subtitleStreamIndex);
-                    queryParams.append('subtitleMethod', subtitleMethod);
+                const effectiveSubtitleStreamIndex = subtitleSelection === 'auto'
+                    ? autoSubtitleStreamIndex
+                    : subtitleSelection === '-1' ? -1 : subtitleSelection;
+                const effectiveSubtitleMethod = subtitleSelection === 'auto'
+                    ? autoSubtitleStreamIndex === null ? 'Drop' : subtitleMethod
+                    : subtitleSelection === '-1' ? 'Drop' : subtitleMethod;
+
+                if (effectiveSubtitleStreamIndex !== null) {
+                    queryParams.append('subtitleStreamIndex', effectiveSubtitleStreamIndex);
+                    queryParams.append('subtitleMethod', effectiveSubtitleMethod);
                 }
 
                 const finalUrl = serverUrl + '/Videos/' + itemId + '/master.m3u8?' + decodeURIComponent(queryParams.toString());
