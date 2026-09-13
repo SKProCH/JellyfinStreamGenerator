@@ -1,20 +1,24 @@
+using Jellyfin.Database.Implementations.Entities;
+using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.MediaEncoding;
+using MediaBrowser.Controller.Library;
+using MediaBrowser.Controller.Net;
+using MediaBrowser.Model.Dto;
+using MediaBrowser.Model.Entities;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.Abstractions;
 using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Routing;
-using Microsoft.Extensions.Primitives;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Jellyfin.Plugin.StreamGenerator.Progress;
 
 namespace Jellyfin.Plugin.StreamGenerator.Tests.Filters;
 
-public class DynamicHlsContentInterceptionFilterTests
+public class StreamGeneratorSegmentReuseFilterTests
 {
     private static readonly Guid ItemId = Guid.Parse("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
 
@@ -48,11 +52,56 @@ public class DynamicHlsContentInterceptionFilterTests
     }
 
     [Fact]
+    public async Task StreamGeneratorMasterRequest_AddsOriginalVideoParameters()
+    {
+        var fixture = CreateFixture(
+            action: "GetMasterHlsVideoPlaylist",
+            query: "?mediaSourceId=source&deviceId=stream_generator&playSessionId=stream_generator_random",
+            includeSegmentArguments: false);
+        var user = new User("test", "auth", "reset");
+        var item = new Mock<BaseItem>().Object;
+        var source = new MediaSourceInfo
+        {
+            Id = "source",
+            MediaStreams =
+            [
+                new MediaStream
+                {
+                    Type = MediaStreamType.Video,
+                    BitRate = 5_000_000,
+                    Width = 1920,
+                    Height = 1080,
+                },
+            ],
+        };
+        fixture.AuthorizationContext
+            .Setup(x => x.GetAuthorizationInfo(It.IsAny<HttpRequest>()))
+            .ReturnsAsync(new AuthorizationInfo { IsAuthenticated = true, User = user });
+        fixture.LibraryManager.Setup(x => x.GetItemById<BaseItem>(ItemId, user)).Returns(item);
+        fixture.MediaSourceManager
+            .Setup(x => x.GetMediaSource(item, "source", string.Empty, false, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(source);
+        var originalParametersFilter = new StreamGeneratorMasterPlaylistParametersFilter(
+            fixture.AuthorizationContext.Object,
+            fixture.LibraryManager.Object,
+            fixture.MediaSourceManager.Object);
+
+        await originalParametersFilter.OnActionExecutionAsync(fixture.Context, fixture.Next);
+
+        fixture.Context.HttpContext.Request.Query["videoBitrate"].ToString().Should().Be("5000000");
+        fixture.Context.HttpContext.Request.Query["maxWidth"].ToString().Should().Be("1920");
+        fixture.Context.HttpContext.Request.Query["maxHeight"].ToString().Should().Be("1080");
+        fixture.Context.ActionArguments["videoBitRate"].Should().Be(5_000_000);
+        fixture.Context.ActionArguments["maxWidth"].Should().Be(1920);
+        fixture.Context.ActionArguments["maxHeight"].Should().Be(1080);
+    }
+
+    [Fact]
     public async Task ExactStreamGeneratorSession_RemainsStableWhenAnotherJobHasSegment()
     {
         using var temp = new TemporaryDirectory();
         var fixture = CreateFixture(query: "?mediaSourceId=source&segmentContainer=ts&segmentLength=6", segmentId: 3);
-        var key = DynamicHlsContentInterceptionFilter.ComputeConfigKey(fixture.Context, fixture.Context.HttpContext.Request);
+        var key = StreamGeneratorSegmentReuseFilter.ComputeConfigKey(fixture.Context, fixture.Context.HttpContext.Request);
         var requestedSession = $"sg_{key}_11111111";
         var otherSession = $"sg_{key}_22222222";
         fixture.Context.ActionArguments["playSessionId"] = requestedSession;
@@ -93,7 +142,7 @@ public class DynamicHlsContentInterceptionFilterTests
     {
         using var temp = new TemporaryDirectory();
         var fixture = CreateFixture(query: "?mediaSourceId=source&segmentContainer=mp4&segmentLength=6", segmentId: -1);
-        var key = DynamicHlsContentInterceptionFilter.ComputeConfigKey(fixture.Context, fixture.Context.HttpContext.Request);
+        var key = StreamGeneratorSegmentReuseFilter.ComputeConfigKey(fixture.Context, fixture.Context.HttpContext.Request);
         var session = $"sg_{key}_12345678";
         var playlist = Path.Combine(temp.Path, "transcode.m3u8");
         File.WriteAllText(Path.Combine(temp.Path, "transcode-1.mp4"), "init");
@@ -158,8 +207,8 @@ public class DynamicHlsContentInterceptionFilterTests
         var ts = CreateFixture(query: "?mediaSourceId=source&segmentContainer=ts&segmentLength=6");
         var mp4 = CreateFixture(query: "?mediaSourceId=source&segmentContainer=mp4&segmentLength=6");
 
-        var tsKey = DynamicHlsContentInterceptionFilter.ComputeConfigKey(ts.Context, ts.Context.HttpContext.Request);
-        var mp4Key = DynamicHlsContentInterceptionFilter.ComputeConfigKey(mp4.Context, mp4.Context.HttpContext.Request);
+        var tsKey = StreamGeneratorSegmentReuseFilter.ComputeConfigKey(ts.Context, ts.Context.HttpContext.Request);
+        var mp4Key = StreamGeneratorSegmentReuseFilter.ComputeConfigKey(mp4.Context, mp4.Context.HttpContext.Request);
 
         tsKey.Should().NotBe(mp4Key);
     }
@@ -170,8 +219,8 @@ public class DynamicHlsContentInterceptionFilterTests
         var defaults = CreateFixture(query: "?mediaSourceId=source", includeSegmentArguments: false);
         var explicitValues = CreateFixture(query: "?mediaSourceId=source&segmentContainer=ts&segmentLength=6");
 
-        var defaultKey = DynamicHlsContentInterceptionFilter.ComputeConfigKey(defaults.Context, defaults.Context.HttpContext.Request);
-        var explicitKey = DynamicHlsContentInterceptionFilter.ComputeConfigKey(explicitValues.Context, explicitValues.Context.HttpContext.Request);
+        var defaultKey = StreamGeneratorSegmentReuseFilter.ComputeConfigKey(defaults.Context, defaults.Context.HttpContext.Request);
+        var explicitKey = StreamGeneratorSegmentReuseFilter.ComputeConfigKey(explicitValues.Context, explicitValues.Context.HttpContext.Request);
 
         defaultKey.Should().Be(explicitKey);
     }
@@ -186,8 +235,8 @@ public class DynamicHlsContentInterceptionFilterTests
         var baseline = CreateFixture(query: "?mediaSourceId=source&segmentContainer=ts&segmentLength=6");
         var changed = CreateFixture(query: $"?mediaSourceId=source&segmentContainer=ts&segmentLength=6&{parameter}={value}");
 
-        var baselineKey = DynamicHlsContentInterceptionFilter.ComputeConfigKey(baseline.Context, baseline.Context.HttpContext.Request);
-        var changedKey = DynamicHlsContentInterceptionFilter.ComputeConfigKey(changed.Context, changed.Context.HttpContext.Request);
+        var baselineKey = StreamGeneratorSegmentReuseFilter.ComputeConfigKey(baseline.Context, baseline.Context.HttpContext.Request);
+        var changedKey = StreamGeneratorSegmentReuseFilter.ComputeConfigKey(changed.Context, changed.Context.HttpContext.Request);
 
         changedKey.Should().NotBe(baselineKey);
     }
@@ -198,8 +247,8 @@ public class DynamicHlsContentInterceptionFilterTests
         var baseline = CreateFixture(query: "?mediaSourceId=source&segmentContainer=ts&segmentLength=6");
         var changed = CreateFixture(query: "?mediaSourceId=source&segmentContainer=ts&segmentLength=6&futureEncodingOption=value");
 
-        var baselineKey = DynamicHlsContentInterceptionFilter.ComputeConfigKey(baseline.Context, baseline.Context.HttpContext.Request);
-        var changedKey = DynamicHlsContentInterceptionFilter.ComputeConfigKey(changed.Context, changed.Context.HttpContext.Request);
+        var baselineKey = StreamGeneratorSegmentReuseFilter.ComputeConfigKey(baseline.Context, baseline.Context.HttpContext.Request);
+        var changedKey = StreamGeneratorSegmentReuseFilter.ComputeConfigKey(changed.Context, changed.Context.HttpContext.Request);
 
         changedKey.Should().NotBe(baselineKey);
     }
@@ -216,8 +265,8 @@ public class DynamicHlsContentInterceptionFilterTests
         var baseline = CreateFixture(query: "?mediaSourceId=source&segmentContainer=ts&segmentLength=6");
         var changed = CreateFixture(query: $"?mediaSourceId=source&segmentContainer=ts&segmentLength=6&{parameter}={value}");
 
-        var baselineKey = DynamicHlsContentInterceptionFilter.ComputeConfigKey(baseline.Context, baseline.Context.HttpContext.Request);
-        var changedKey = DynamicHlsContentInterceptionFilter.ComputeConfigKey(changed.Context, changed.Context.HttpContext.Request);
+        var baselineKey = StreamGeneratorSegmentReuseFilter.ComputeConfigKey(baseline.Context, baseline.Context.HttpContext.Request);
+        var changedKey = StreamGeneratorSegmentReuseFilter.ComputeConfigKey(changed.Context, changed.Context.HttpContext.Request);
 
         changedKey.Should().Be(baselineKey);
     }
@@ -228,8 +277,8 @@ public class DynamicHlsContentInterceptionFilterTests
         var first = CreateFixture(query: "?mediaSourceId=source&videoCodec=h264&segmentContainer=ts&segmentLength=6");
         var second = CreateFixture(query: "?segmentLength=6&segmentContainer=ts&videoCodec=h264&mediaSourceId=source");
 
-        var firstKey = DynamicHlsContentInterceptionFilter.ComputeConfigKey(first.Context, first.Context.HttpContext.Request);
-        var secondKey = DynamicHlsContentInterceptionFilter.ComputeConfigKey(second.Context, second.Context.HttpContext.Request);
+        var firstKey = StreamGeneratorSegmentReuseFilter.ComputeConfigKey(first.Context, first.Context.HttpContext.Request);
+        var secondKey = StreamGeneratorSegmentReuseFilter.ComputeConfigKey(second.Context, second.Context.HttpContext.Request);
 
         secondKey.Should().Be(firstKey);
     }
@@ -268,17 +317,35 @@ public class DynamicHlsContentInterceptionFilterTests
             arguments["segmentLength"] = int.TryParse(httpContext.Request.Query["segmentLength"], out var length) ? length : null;
         }
 
+        if (action == "GetMasterHlsVideoPlaylist")
+        {
+            arguments["videoBitRate"] = null;
+            arguments["maxWidth"] = null;
+            arguments["maxHeight"] = null;
+        }
+
         var context = new ActionExecutingContext(actionContext, [], arguments, new object());
         var manager = new Mock<IAdvancedTranscodeManager>();
         manager.Setup(x => x.GetActiveTranscodingJobs()).Returns([]);
         var progressTracker = new Mock<IPlaybackProgressTracker>();
         progressTracker.Setup(x => x.CreateObservationAsync(It.IsAny<ActionExecutingContext>()))
             .ReturnsAsync((SegmentProgressObservation?)null);
-        var subject = new DynamicHlsContentInterceptionFilter(
+        var authorizationContext = new Mock<IAuthorizationContext>();
+        var libraryManager = new Mock<ILibraryManager>();
+        var mediaSourceManager = new Mock<IMediaSourceManager>();
+        var subject = new StreamGeneratorSegmentReuseFilter(
             manager.Object,
             progressTracker.Object,
-            NullLogger<DynamicHlsContentInterceptionFilter>.Instance);
-        var fixture = new Fixture(subject, context, manager, progressTracker, responseFeature);
+            NullLogger<StreamGeneratorSegmentReuseFilter>.Instance);
+        var fixture = new Fixture(
+            subject,
+            context,
+            manager,
+            progressTracker,
+            authorizationContext,
+            libraryManager,
+            mediaSourceManager,
+            responseFeature);
         fixture.Next = () =>
         {
             fixture.NextCalls++;
@@ -296,16 +363,22 @@ public class DynamicHlsContentInterceptionFilterTests
         };
 
     private sealed class Fixture(
-        DynamicHlsContentInterceptionFilter subject,
+        StreamGeneratorSegmentReuseFilter subject,
         ActionExecutingContext context,
         Mock<IAdvancedTranscodeManager> manager,
         Mock<IPlaybackProgressTracker> progressTracker,
+        Mock<IAuthorizationContext> authorizationContext,
+        Mock<ILibraryManager> libraryManager,
+        Mock<IMediaSourceManager> mediaSourceManager,
         TestHttpResponseFeature responseFeature)
     {
-        public DynamicHlsContentInterceptionFilter Subject { get; } = subject;
+        public StreamGeneratorSegmentReuseFilter Subject { get; } = subject;
         public ActionExecutingContext Context { get; } = context;
         public Mock<IAdvancedTranscodeManager> Manager { get; } = manager;
         public Mock<IPlaybackProgressTracker> ProgressTracker { get; } = progressTracker;
+        public Mock<IAuthorizationContext> AuthorizationContext { get; } = authorizationContext;
+        public Mock<ILibraryManager> LibraryManager { get; } = libraryManager;
+        public Mock<IMediaSourceManager> MediaSourceManager { get; } = mediaSourceManager;
         public TestHttpResponseFeature ResponseFeature { get; } = responseFeature;
         public ActionExecutionDelegate Next { get; set; } = null!;
         public int NextCalls { get; set; }

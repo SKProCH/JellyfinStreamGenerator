@@ -12,10 +12,10 @@ using Microsoft.Extensions.Primitives;
 
 namespace Jellyfin.Plugin.StreamGenerator;
 
-public partial class DynamicHlsContentInterceptionFilter(
+public partial class StreamGeneratorSegmentReuseFilter(
     IAdvancedTranscodeManager advancedTranscodeManager,
     IPlaybackProgressTracker playbackProgressTracker,
-    ILogger<DynamicHlsContentInterceptionFilter> logger) : IAsyncActionFilter
+    ILogger<StreamGeneratorSegmentReuseFilter> logger) : IAsyncActionFilter
 {
     private const string SessionPrefix = "sg_";
 

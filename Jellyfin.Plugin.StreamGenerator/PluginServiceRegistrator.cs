@@ -18,7 +18,9 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
         serviceCollection.Decorate<IAuthorizationContext, CustomStreamTokensAuthorizationContext>();
         serviceCollection.AddSingleton<IAdvancedTranscodeManager, AdvancedTranscodeManager>();
         serviceCollection.AddSingleton<IPlaybackProgressTracker, PlaybackProgressTracker>();
-        serviceCollection.Configure<MvcOptions>(opts => opts.Filters.Add<DynamicHlsContentInterceptionFilter>());  
-        serviceCollection.AddSingleton<DynamicHlsContentInterceptionFilter>(); 
+        serviceCollection.Configure<MvcOptions>(opts => opts.Filters.Add<StreamGeneratorMasterPlaylistParametersFilter>());
+        serviceCollection.Configure<MvcOptions>(opts => opts.Filters.Add<StreamGeneratorSegmentReuseFilter>());
+        serviceCollection.AddSingleton<StreamGeneratorMasterPlaylistParametersFilter>();
+        serviceCollection.AddSingleton<StreamGeneratorSegmentReuseFilter>();
     }
 }
