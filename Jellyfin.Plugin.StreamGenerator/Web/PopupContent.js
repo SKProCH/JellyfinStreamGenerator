@@ -314,6 +314,15 @@ var showStreamGeneratorPopup = function (itemId, serverId) {
         html += '<input type="range" id="maxVideoBitrate" style="' + selectStyle + ' cursor: pointer; margin-bottom: 0; flex: 1;" min="' + minBitrate + '" max="' + sliderMax + '" step="' + bitrateStep + '" value="' + sliderMax + '">';
         html += '</div></label>';
 
+        html += '<label style="display: block; margin-top: 15px;">Segment Container:<br>';
+        html += '<select id="segmentContainer" style="' + selectStyle + ' margin-bottom: 0;">';
+        html += '<option value="mp4" selected>fMP4 (recommended)</option>';
+        html += '<option value="ts">MPEG-TS</option>';
+        html += '</select>';
+        html += '<small style="display: block; margin-top: 6px; color: #bbb; line-height: 1.4;">';
+        html += 'Choose MPEG-TS for older, embedded, or otherwise limited HLS players that cannot play fragmented MP4.';
+        html += '</small></label>';
+
         html += '<label style="display: flex; align-items: center; margin-top: 15px; cursor: pointer;">';
         html += '<input type="checkbox" id="copyTimestamps" style="margin-right: 8px;" checked />';
         html += '<span>Copy Timestamps</span>';
@@ -412,6 +421,7 @@ var showStreamGeneratorPopup = function (itemId, serverId) {
             const copyTimestamps = modal.querySelector('#copyTimestamps').checked;
             const selectedBitrate = parseInt(modal.querySelector('#maxVideoBitrate').value, 10);
             const maxVideoBitrate = selectedBitrate === sliderMax ? null : selectedBitrate;
+            const segmentContainer = modal.querySelector('#segmentContainer').value;
 
             const serverUrl = apiClient.serverAddress();
 
@@ -425,8 +435,9 @@ var showStreamGeneratorPopup = function (itemId, serverId) {
                     enableAutoStreamCopy: true,
                     allowVideoStreamCopy: true,
                     allowAudioStreamCopy: true,
-                     copyTimestamps: copyTimestamps
-                 });
+                    copyTimestamps: copyTimestamps,
+                    segmentContainer: segmentContainer
+                });
 
                  if (maxVideoBitrate !== null) queryParams.append('videoBitrate', maxVideoBitrate);
                 if (videoCodecsStr) queryParams.append('videoCodec', videoCodecsStr);
