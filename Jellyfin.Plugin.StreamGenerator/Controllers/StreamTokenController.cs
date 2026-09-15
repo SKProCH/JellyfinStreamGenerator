@@ -16,6 +16,28 @@ public class StreamTokenController(
     IStreamGeneratorConfigurationAccessor configurationAccessor)
     : ControllerBase
 {
+    [HttpGet("PopupContent.js")]
+    [AllowAnonymous]
+    [Produces("application/javascript")]
+    public ContentResult GetPopupContent()
+    {
+        Response.Headers.CacheControl = "no-store";
+        return Content(ReadPopupScript(), "application/javascript");
+    }
+
+    private static string ReadPopupScript()
+    {
+        const string resourceName = "Jellyfin.Plugin.StreamGenerator.Web.PopupContent.js";
+        using var stream = typeof(StreamTokenController).Assembly.GetManifestResourceStream(resourceName);
+        if (stream is null)
+        {
+            return "console.error('StreamGenerator: PopupContent.js resource not found');";
+        }
+
+        using var reader = new StreamReader(stream);
+        return reader.ReadToEnd();
+    }
+
     [HttpGet("Settings")]
     [Authorize]
     public ActionResult<PluginSettings> GetSettings()

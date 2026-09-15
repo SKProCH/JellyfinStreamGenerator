@@ -150,7 +150,8 @@ public class StreamGeneratorPlugin : BasePlugin<PluginConfiguration>, IHasWebPag
                 $"$1{generateStreamObj}"
             );
 
-            var generateStreamCase = @"case""generate-stream"":if(window.showStreamGeneratorPopup){window.showStreamGeneratorPopup(c,u)}else{console.error(""StreamGenerator popup script not loaded!"")}try{k(l,t)()}catch(e){console.error(""StreamGenerator: Error calling getResolveFunction"",e)}break;";
+            var generateStreamCase =
+                @"case""generate-stream"":if(window.showStreamGeneratorPopup){window.showStreamGeneratorPopup(c,u)}else if(window.streamGeneratorPopupPromise){window.streamGeneratorPopupPromise.then(function(){if(window.showStreamGeneratorPopup)window.showStreamGeneratorPopup(c,u)}).catch(function(e){console.error(""StreamGenerator popup script failed to load"",e)})}else{console.error(""StreamGenerator popup script not loaded!"")}try{k(l,t)()}catch(e){console.error(""StreamGenerator: Error calling getResolveFunction"",e)}break;";
 
             var regexCase = Regex.Replace(
                 regexContext,
@@ -163,8 +164,10 @@ public class StreamGeneratorPlugin : BasePlugin<PluginConfiguration>, IHasWebPag
                 return payload.Contents;
             }
 
-            var popupJs = GetPopupScriptFromResources();
-            var finalResult = regexCase + "\n" + popupJs;
+            // Load the popup as a separate resource so updates do not depend on the cached Jellyfin chunk.
+            var popupLoader =
+                "window.streamGeneratorPopupPromise=import(window.ApiClient.getUrl('StreamGenerator/PopupContent.js')).catch(function(error){console.error('StreamGenerator: Failed to load popup script',error);return null;});";
+            var finalResult = regexCase + "\n" + popupLoader;
 
             return finalResult;
         }
@@ -175,18 +178,4 @@ public class StreamGeneratorPlugin : BasePlugin<PluginConfiguration>, IHasWebPag
         }
     }
 
-    private static string GetPopupScriptFromResources()
-    {
-        var assembly = Assembly.GetExecutingAssembly();
-        var resourceName = "Jellyfin.Plugin.StreamGenerator.Web.PopupContent.js";
-
-        using var stream = assembly.GetManifestResourceStream(resourceName);
-        if (stream == null)
-        {
-            return "console.error('StreamGenerator: PopupContent.js resource not found');";
-        }
-
-        using var reader = new StreamReader(stream);
-        return reader.ReadToEnd();
-    }
 }
