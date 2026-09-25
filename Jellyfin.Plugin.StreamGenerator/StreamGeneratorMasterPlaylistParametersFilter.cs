@@ -56,7 +56,13 @@ public sealed class StreamGeneratorMasterPlaylistParametersFilter(
                 false,
                 request.HttpContext.RequestAborted)
             .ConfigureAwait(false);
-        var videoStream = mediaSource?.MediaStreams.FirstOrDefault(stream => stream.Type == MediaStreamType.Video);
+        var requestedVideoStreamIndex = request.Query.TryGetValue("videoStreamIndex", out var videoStreamIndexValue)
+            && int.TryParse(videoStreamIndexValue.ToString(), CultureInfo.InvariantCulture, out var parsedVideoStreamIndex)
+            ? parsedVideoStreamIndex
+            : (int?)null;
+        var videoStream = mediaSource?.MediaStreams.FirstOrDefault(stream =>
+            stream.Type == MediaStreamType.Video
+            && (!requestedVideoStreamIndex.HasValue || stream.Index == requestedVideoStreamIndex.Value));
         var videoBitrate = videoStream?.BitRate;
         if ((!videoBitrate.HasValue || videoBitrate.Value <= 0) && mediaSource?.Bitrate is > 0)
         {
