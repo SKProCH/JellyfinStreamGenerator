@@ -97,6 +97,41 @@ public class StreamGeneratorSegmentReuseFilterTests
     }
 
     [Fact]
+    public async Task StreamGeneratorMasterRequest_UsesSelectedVideoStream()
+    {
+        var fixture = CreateFixture(
+            action: "GetMasterHlsVideoPlaylist",
+            query: "?mediaSourceId=source&deviceId=stream_generator&playSessionId=stream_generator_random&videoStreamIndex=1",
+            includeSegmentArguments: false);
+        var user = new User("test", "auth", "reset");
+        var item = new Mock<BaseItem>().Object;
+        var source = new MediaSourceInfo
+        {
+            Id = "source",
+            MediaStreams =
+            [
+                new MediaStream { Type = MediaStreamType.Video, Index = 0, BitRate = 5_000_000, Width = 3840, Height = 2160 },
+                new MediaStream { Type = MediaStreamType.Video, Index = 1, BitRate = 1_500_000, Width = 1920, Height = 1080 },
+            ],
+        };
+        fixture.AuthorizationContext
+            .Setup(x => x.GetAuthorizationInfo(It.IsAny<HttpRequest>()))
+            .ReturnsAsync(new AuthorizationInfo { IsAuthenticated = true, User = user });
+        fixture.LibraryManager.Setup(x => x.GetItemById<BaseItem>(ItemId, user)).Returns(item);
+        fixture.MediaSourceManager.Setup(x => x.GetMediaSource(item, "source", string.Empty, false, It.IsAny<CancellationToken>())).ReturnsAsync(source);
+        var originalParametersFilter = new StreamGeneratorMasterPlaylistParametersFilter(
+            fixture.AuthorizationContext.Object,
+            fixture.LibraryManager.Object,
+            fixture.MediaSourceManager.Object);
+
+        await originalParametersFilter.OnActionExecutionAsync(fixture.Context, fixture.Next);
+
+        fixture.Context.HttpContext.Request.Query["videoBitrate"].ToString().Should().Be("1500000");
+        fixture.Context.HttpContext.Request.Query["maxWidth"].ToString().Should().Be("1920");
+        fixture.Context.HttpContext.Request.Query["maxHeight"].ToString().Should().Be("1080");
+    }
+
+    [Fact]
     public async Task ExactStreamGeneratorSession_RemainsStableWhenAnotherJobHasSegment()
     {
         using var temp = new TemporaryDirectory();
