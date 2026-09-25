@@ -150,8 +150,33 @@ public class StreamGeneratorPlugin : BasePlugin<PluginConfiguration>, IHasWebPag
                 $"$1{generateStreamObj}"
             );
 
+            // Do not rely on minifier-generated local names. Jellyfin web changes those names
+            // between releases, while the command handler itself keeps the same three arguments.
+            var copyStreamCaseIndex = regexContext.IndexOf("case\"copy-stream\"", StringComparison.Ordinal);
+            if (copyStreamCaseIndex < 0)
+            {
+                return payload.Contents;
+            }
+
+            var functionMatches = Regex.Matches(
+                regexContext[..copyStreamCaseIndex],
+                @"function(?:\s+[A-Za-z_$][\w$]*)?\s*\(\s*([A-Za-z_$][\w$]*)\s*,\s*([A-Za-z_$][\w$]*)\s*,\s*([A-Za-z_$][\w$]*)\s*\)\s*\{");
+
+            if (functionMatches.Count == 0)
+            {
+                Instance?._logger.LogWarning("Could not find the item command handler while patching itemContextMenu.js");
+                return payload.Contents;
+            }
+
+            var commandFunction = functionMatches[^1];
+            var itemArgument = commandFunction.Groups[1].Value;
+            var commandFunctionStart = commandFunction.Index + commandFunction.Length;
+            var contextSetup =
+                $"window.streamGeneratorCommandContext={{item:{itemArgument},serverId:{itemArgument}.ServerId}};";
+            regexContext = regexContext.Insert(commandFunctionStart, contextSetup);
+
             var generateStreamCase =
-                @"case""generate-stream"":if(window.showStreamGeneratorPopup){window.showStreamGeneratorPopup(c,u)}else if(window.streamGeneratorPopupPromise){window.streamGeneratorPopupPromise.then(function(){if(window.showStreamGeneratorPopup)window.showStreamGeneratorPopup(c,u)}).catch(function(e){console.error(""StreamGenerator popup script failed to load"",e)})}else{console.error(""StreamGenerator popup script not loaded!"")}try{k(l,t)()}catch(e){console.error(""StreamGenerator: Error calling getResolveFunction"",e)}break;";
+                @"case""generate-stream"":(function(){var context=window.streamGeneratorCommandContext;if(!context){console.error(""StreamGenerator: command context not found"");return}var open=function(){if(window.showStreamGeneratorPopup){window.showStreamGeneratorPopup(context.item.Id,context.serverId)}else{console.error(""StreamGenerator: popup script did not register showStreamGeneratorPopup"")}};if(window.streamGeneratorPopupPromise){window.streamGeneratorPopupPromise.then(open).catch(function(e){console.error(""StreamGenerator popup script failed to load"",e)})}else{open()}})();break;";
 
             var regexCase = Regex.Replace(
                 regexContext,

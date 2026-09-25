@@ -20,7 +20,7 @@ Inspired by [vrchat-jellyfin](https://github.com/orcachillin/vrchat-jellyfin) bu
 
 ### Requirements
 
-- **Jellyfin 10.11.x**
+- **Jellyfin 12.0.x**
 - **Jellyfin File Transformation Plugin**: This plugin relies on [jellyfin-plugin-file-transformation](https://github.com/IAmParadox27/jellyfin-plugin-file-transformation). You must install it on your server first.
 
 ### Via Plugin Repository (recommended)
@@ -67,4 +67,4 @@ Plugin versions use the format `x.y.z.N`. The last digit (`N`) is the preview bu
 ```bash
 dotnet build
 ```
-The compiled library will be available at `bin/Debug/net9.0/Jellyfin.Plugin.StreamGenerator.dll`
+The compiled library will be available at `bin/Debug/net10.0/Jellyfin.Plugin.StreamGenerator.dll`

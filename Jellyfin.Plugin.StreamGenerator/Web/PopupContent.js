@@ -1,5 +1,24 @@
 var showStreamGeneratorPopup = function (itemId, serverId) {
     const apiClient = window.ApiClient;
+    const getItemId = function (value) {
+        if (typeof value === 'string') {
+            return value;
+        }
+
+        const candidate = value?.Id || value?.id;
+        return typeof candidate === 'string' ? candidate : null;
+    };
+    const getItemIdFromLocation = function () {
+        const locationText = window.location.hash + window.location.search;
+        const match = locationText.match(/[?&#](?:id|itemId)=([0-9a-f-]{32,36})/i);
+        return match ? match[1] : null;
+    };
+    const normalizedItemId = getItemIdFromLocation() || getItemId(itemId);
+
+    if (!apiClient) {
+        console.error('StreamGenerator: Jellyfin ApiClient is not available');
+        return;
+    }
 
     const showToast = function (message) {
         const toast = document.createElement('div');
@@ -63,15 +82,18 @@ var showStreamGeneratorPopup = function (itemId, serverId) {
         return html;
     };
 
+    if (!normalizedItemId) {
+        showToast("Cannot get the item ID for this item.");
+        return;
+    }
+
     /* Fetch media item and encoding options */
     Promise.all([
-        apiClient.getItem(apiClient.getCurrentUserId(), itemId),
-        apiClient.getJSON(apiClient.getUrl('Encoding/PublicOptions')).catch(() => ({
-            TranscodingVideoCodecs: ['h264']
-        })),
+        apiClient.getItem(apiClient.getCurrentUserId(), normalizedItemId),
         apiClient.getJSON(apiClient.getUrl('StreamGenerator/Settings')).catch(() => ({})),
-        apiClient.getJSON(apiClient.getUrl('Users/' + apiClient.getCurrentUserId())).catch(() => ({}))
-    ]).then(([item, encodingOptions, settings, user]) => {
+        apiClient.getJSON(apiClient.getUrl('Users/' + apiClient.getCurrentUserId())).catch(() => ({})),
+        apiClient.getJSON(apiClient.getUrl('System/Configuration/encoding')).catch(() => ({}))
+    ]).then(([item, settings, user, encodingConfiguration]) => {
         if (!item || !item.MediaSources || item.MediaSources.length === 0) {
             showToast("Cannot get media sources for this item.");
             return;
@@ -83,7 +105,10 @@ var showStreamGeneratorPopup = function (itemId, serverId) {
 
         /* Filter Video Codecs */
         const sourceVideoCodecs = (mediaSource.MediaStreams || []).filter(s => s.Type === 'Video').map(s => s.Codec).filter(Boolean);
-        const videoCodecs = getFilteredCodecs(sourceVideoCodecs, encodingOptions.TranscodingVideoCodecs || [], ['h264', 'hevc', 'av1', 'vp9'], 'h264');
+        const supportedTranscodingCodecs = ['h264'];
+        if (encodingConfiguration?.AllowHevcEncoding === true) supportedTranscodingCodecs.push('hevc');
+        if (encodingConfiguration?.AllowAv1Encoding === true) supportedTranscodingCodecs.push('av1');
+        const videoCodecs = getFilteredCodecs(sourceVideoCodecs, supportedTranscodingCodecs, ['h264', 'hevc', 'av1', 'vp9'], 'h264');
         const videoCodecsHtml = generateCodecCheckboxesHtml(videoCodecs, 'videoCodec', checkboxLabelStyle);
 
         const videoStream = (mediaSource.MediaStreams || []).find(s => s.Type === 'Video');
@@ -455,7 +480,7 @@ var showStreamGeneratorPopup = function (itemId, serverId) {
                     queryParams.append('subtitleMethod', effectiveSubtitleMethod);
                 }
 
-                const finalUrl = serverUrl + '/Videos/' + itemId + '/master.m3u8?' + decodeURIComponent(queryParams.toString());
+                const finalUrl = serverUrl + '/Videos/' + normalizedItemId + '/master.m3u8?' + decodeURIComponent(queryParams.toString());
 
                 if (navigator.clipboard && window.isSecureContext) {
                     navigator.clipboard.writeText(finalUrl).then(() => {
@@ -486,7 +511,7 @@ var showStreamGeneratorPopup = function (itemId, serverId) {
                 const selectedDuration = modal.querySelector('#tokenDurationHours').value;
                 const progressCheckbox = modal.querySelector('#rememberPlaybackProgress');
                 const queryObj = {
-                    itemId: itemId,
+                    itemId: normalizedItemId,
                     rememberPlaybackProgress: progressCheckbox ? progressCheckbox.checked : settings.RememberPlaybackProgressByDefault !== false
                 };
                 if (selectedDuration !== '') {
@@ -508,6 +533,9 @@ var showStreamGeneratorPopup = function (itemId, serverId) {
                 buildUrl(apiClient.accessToken());
             }
         });
+    }).catch(function (error) {
+        console.error('StreamGenerator: Failed to load popup data', error);
+        showToast('Failed to load stream options. Please create an issue and attach all messages from the browser Console.');
     });
 };
 window.showStreamGeneratorPopup = showStreamGeneratorPopup;
