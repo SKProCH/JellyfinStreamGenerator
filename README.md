@@ -51,17 +51,19 @@ Plugin versions use the format `x.y.z.N`. The last digit (`N`) is the preview bu
 - Adds a new button "Generate Stream URL" for a video item  
   <img width="239" height="128" alt="image" src="https://github.com/user-attachments/assets/229c4263-4050-45ba-be9f-4decf36497ac" />
 - Provides a GUI popup with selectable options:
-  - Video/Audio codec
-  - Audio/Subtitle stream track selection
-  - Subtitle burning method (HLS, Encode, Embed)
+  - Video/audio reencoding for compatibility
+  - Video/audio/subtitle stream track selection
   - Bitrate selection
+  - Subtitle burning method (HLS, Encode, Embed)
+  - Container selection (fMP4/TS)
   - Copy Timestamps
+  - Remember watch progress for your account when you watching something via StreamGenerator links
   - etc  
-  <img width="464" height="671" alt="image" src="https://github.com/user-attachments/assets/22661870-cbf6-4f8a-9ad9-189d3470529e" />
+  <img width="1119" height="751" alt="image" src="https://github.com/user-attachments/assets/8c41e555-3768-4385-ad54-06320af9c617" />
 - Generates a `master.m3u8` playlist URL mimicking an API call
 - Generates a unique token for each generated URL, without exposing your Jellyfin token  
   <img width="616" height="659" alt="image" src="https://github.com/user-attachments/assets/36785259-834f-4f92-94c0-d77eb898a777" />
-- Serves the already transcoded video parts if available to avoid unnecessary transcoding 
+- Serves the already transcoded video parts if available to avoid unnecessary transcoding for multiple users
 
 ## Building from source
 ```bash
