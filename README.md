@@ -39,6 +39,11 @@ Inspired by [vrchat-jellyfin](https://github.com/orcachillin/vrchat-jellyfin) bu
 2. Extract the zip into a new folder inside your Jellyfin server's `plugins` directory, e.g. `<Jellyfin Data Folder>/plugins/StreamGenerator/`
 3. Restart your Jellyfin Server
 
+> [!IMPORTANT]
+> If the **Generate Stream URL** option does not appear after installation, clear the browser cache for the Jellyfin web interface and reload the page.
+>
+> In Chrome, open Jellyfin, press `F12`, right-click the browser reload button, select **Empty Cache and Hard Reload**, and then close DevTools.
+
 ## My other plugins
 
 [JellyfinReplayGain](https://github.com/SKProCH/JellyfinReplayGain) - measures and adjusts volume on the fly during transcoding without modifying media files
