@@ -128,16 +128,18 @@ var showStreamGeneratorPopup = function (itemId, serverId) {
         const subtitleSelect = modal.querySelector('#subtitleStreamIndex');
         const subtitleMethod = modal.querySelector('#subtitleMethod');
         const videoCompatibility = modal.querySelector('#videoCompatibility');
+        let videoCompatibilitySelected = videoCompatibility.checked;
         const audioCompatibility = modal.querySelector('#audioCompatibility');
         const segmentContainerSelect = modal.querySelector('#segmentContainer');
         const bitrateSlider = modal.querySelector('#maxVideoBitrate');
         const bitrateDisplay = modal.querySelector('#bitrateDisplay');
         const selectedVideo = () => videoStreams.find(stream => stream.Index === Number(videoSelect.value)) || defaultVideo;
         const selectedAudio = () => audioSelect.value === '' ? defaultAudio : audioStreams.find(stream => stream.Index === Number(audioSelect.value)) || defaultAudio;
+        const burnsSubtitles = () => (subtitleSelect.value === 'auto' ? autoSubtitleIndex != null : subtitleSelect.value !== '-1') && subtitleMethod.value === 'Encode';
         const getAutomaticContainer = () => {
             const video = selectedVideo();
             const audio = selectedAudio();
-            const videoCodec = videoCompatibility.checked && !isCodec(video, 'h264') ? 'h264' : String(video?.Codec || '').toLowerCase();
+            const videoCodec = burnsSubtitles() || (videoCompatibility.checked && !isCodec(video, 'h264')) ? 'h264' : String(video?.Codec || '').toLowerCase();
             const audioCodec = audioCompatibility.checked && !isCodec(audio, 'aac') ? 'aac' : String(audio?.Codec || '').toLowerCase();
             // Prefer fMP4. FFmpeg's MP4 muxer rejects VP8; VP9/AV1 and FLAC/Opus/TrueHD require MP4 mode.
             const fmp4UnsupportedVideoCodecs = ['vp8'];
@@ -168,24 +170,26 @@ var showStreamGeneratorPopup = function (itemId, serverId) {
             bitrateDisplay.textContent = sourceBitrate ? '· ' + formatBitrate(sourceBitrate) + ' (source)' : '· source bitrate unknown';
         };
         const updateState = () => {
+            videoCompatibility.checked = videoCompatibilitySelected || burnsSubtitles();
+            videoCompatibility.disabled = !canVideoTranscode || burnsSubtitles();
             const video = selectedVideo();
             const audio = selectedAudio();
-            const videoNeedsConversion = videoCompatibility.checked && !isCodec(video, 'h264');
+            const videoNeedsConversion = burnsSubtitles() || (videoCompatibility.checked && !isCodec(video, 'h264'));
             const audioNeedsConversion = audioCompatibility.checked && !isCodec(audio, 'aac');
             modal.querySelector('#videoMeta').textContent = video ? [formatBitrate(video.BitRate || 0), video.Profile, video.RefFrames ? video.RefFrames + ' ref frames' : null].filter(Boolean).join(' · ') : '';
             modal.querySelector('#audioMeta').textContent = audio ? [audio.Codec ? codecName(audio.Codec) : null, audio.ChannelLayout, audio.BitRate ? formatBitrate(audio.BitRate) : null].filter(Boolean).join(' · ') : '';
             modal.querySelector('#videoCompatibilityInfo').textContent = videoNeedsConversion ? codecName(video.Codec) + ' → H.264 · video transcoding' : isCodec(video, 'vp8') ? 'VP8 · not supported by the fMP4 muxer' : !canVideoTranscode && !isCodec(video, 'h264') ? codecName(video?.Codec) + ' · transcoding unavailable' : codecName(video?.Codec) + ' · can be copied';
             modal.querySelector('#audioCompatibilityInfo').textContent = audioNeedsConversion ? codecName(audio.Codec) + ' → AAC · audio transcoding' : !canAudioTranscode && !isCodec(audio, 'aac') ? codecName(audio?.Codec) + ' · transcoding unavailable' : codecName(audio?.Codec) + ' · can be copied';
-            const subtitleNeedsConversion = subtitleSelect.value !== '-1' && subtitleMethod.value === 'Encode';
-            modal.querySelector('#subtitleInfo').textContent = subtitleSelect.value === '-1' ? 'Subtitles disabled' : subtitleNeedsConversion ? 'Burning subtitles requires video transcoding' : 'Subtitles remain a separate stream';
+            const subtitleNeedsConversion = burnsSubtitles();
+            modal.querySelector('#subtitleInfo').textContent = subtitleSelect.value === '-1' || (subtitleSelect.value === 'auto' && autoSubtitleIndex == null) ? 'Subtitles disabled' : subtitleNeedsConversion ? 'Burning subtitles will transcode video to H.264' : 'Subtitles remain a separate stream';
             updateSegmentContainer();
         };
 
         modal.querySelector('#btnCancel').addEventListener('click', closePopup);
-        modal.querySelector('#btnMaxCompatibility').addEventListener('click', () => { if (canVideoTranscode) videoCompatibility.checked = true; if (canAudioTranscode) audioCompatibility.checked = true; updateState(); });
+        modal.querySelector('#btnMaxCompatibility').addEventListener('click', () => { if (canVideoTranscode) videoCompatibilitySelected = true; if (canAudioTranscode) audioCompatibility.checked = true; updateState(); });
         videoSelect.addEventListener('change', () => { updateBitrate(); updateState(); });
         audioSelect.addEventListener('change', () => { autoSubtitle = findAutoSubtitle(selectedAudio()?.Index); autoSubtitleIndex = autoSubtitle?.Index ?? null; subtitleSelect.querySelector('option[value="auto"]').textContent = autoSubtitleLabel(); if (subtitleSelect.value === 'auto') subtitleMethod.value = autoSubtitle ? (canVideoTranscode ? 'Encode' : 'Hls') : 'Drop'; updateState(); });
-        videoCompatibility.addEventListener('change', updateState);
+        videoCompatibility.addEventListener('change', () => { videoCompatibilitySelected = videoCompatibility.checked; updateState(); });
         audioCompatibility.addEventListener('change', updateState);
         segmentContainerSelect.addEventListener('change', updateSegmentContainer);
         subtitleMethod.addEventListener('change', updateState);
@@ -202,7 +206,7 @@ var showStreamGeneratorPopup = function (itemId, serverId) {
             const audio = selectedAudio();
             const videoNeedsConversion = videoCompatibility.checked && !isCodec(video, 'h264');
             const audioNeedsConversion = audioCompatibility.checked && !isCodec(audio, 'aac');
-            const subtitleNeedsConversion = subtitleSelect.value !== '-1' && subtitleMethod.value === 'Encode';
+            const subtitleNeedsConversion = burnsSubtitles();
             const errors = [];
             if ((videoNeedsConversion || subtitleNeedsConversion) && !canVideoTranscode) errors.push('Video transcoding is not allowed for this user.');
             if (audioNeedsConversion && !canAudioTranscode) errors.push('Audio transcoding is not allowed for this user.');
@@ -217,7 +221,7 @@ var showStreamGeneratorPopup = function (itemId, serverId) {
             const selectedContainer = segmentContainerSelect.value === 'auto' ? getAutomaticContainer() : segmentContainerSelect.value;
             const queryParams = new URLSearchParams({ deviceId: 'stream_generator', playSessionId: 'stream_generator_random', api_key: '', mediaSourceId: mediaSource.Id, static: false, enableAutoStreamCopy: true, allowVideoStreamCopy: true, allowAudioStreamCopy: true, copyTimestamps: modal.querySelector('#copyTimestamps').checked, segmentContainer: selectedContainer, videoStreamIndex: video.Index });
             if (maxVideoBitrate !== null) queryParams.set('videoBitrate', maxVideoBitrate);
-            if (videoNeedsConversion) queryParams.set('videoCodec', 'h264');
+            if (videoNeedsConversion || subtitleNeedsConversion) queryParams.set('videoCodec', 'h264');
             if (audioNeedsConversion) queryParams.set('audioCodec', 'aac');
             if (audioSelect.value !== '') queryParams.set('audioStreamIndex', audioSelect.value);
             if (effectiveSubtitleIndex !== null) { queryParams.set('subtitleStreamIndex', effectiveSubtitleIndex); queryParams.set('subtitleMethod', effectiveSubtitleMethod); }
