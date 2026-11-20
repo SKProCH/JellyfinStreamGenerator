@@ -2,61 +2,61 @@ name: Generate Stream URL is missing
 description: Stream Generator is installed, but the option is missing from the video menu in Jellyfin Web.
 labels: [ bug ]
 body:
-  - type: markdown
-    attributes:
-      value: |
-        Open a movie or episode in Jellyfin Web and check its **⋯** menu for **Generate Stream URL**.
-        If the option appears after clearing the cache, you can stop here.
+    -   type: markdown
+        attributes:
+            value: |
+                Open a movie or episode in Jellyfin Web and check its **⋯** menu for **Generate Stream URL**.
+                If the option appears after clearing the cache, you can stop here.
+                
+                Before attaching logs or screenshots, redact tokens, cookies, authorization headers, private hostnames,
+                and sensitive paths.
 
-        Before attaching logs or screenshots, redact tokens, cookies, authorization headers, private hostnames,
-        and sensitive paths.
+    -   type: checkboxes
+        id: prerequisites
+        attributes:
+            label: Checks before reporting
+            options:
+                -   label: I installed the File Transformation plugin.
+                    required: true
+                -   label: Stream Generator appears in the installed plugins list under Dashboard → Plugins.
+                    required: true
+                -   label: >-
+                        I cleared the browser cache and reloaded Jellyfin Web. In Chrome, open DevTools,
+                        right-click the browser's Reload button, and select "Empty Cache and Hard Reload".
+                        The option is still missing.
+                    required: true
 
-  - type: checkboxes
-    id: prerequisites
-    attributes:
-      label: Checks before reporting
-      options:
-        - label: I installed the File Transformation plugin.
-          required: true
-        - label: Stream Generator appears in the installed plugins list under Dashboard → Plugins.
-          required: true
-        - label: >-
-            I cleared the browser cache and reloaded Jellyfin Web. In Chrome, open DevTools,
-            right-click the browser's Reload button, and select "Empty Cache and Hard Reload".
-            The option is still missing.
-          required: true
+    -   type: textarea
+        id: environment
+        attributes:
+            label: Environment
+            description: Include exact version numbers as shown in the Jellyfin Dashboard or client.
+            value: |
+                - Jellyfin version:
+                - Stream Generator version and status in Dashboard → Plugins:
+        validations:
+            required: true
 
-  - type: textarea
-    id: environment
-    attributes:
-      label: Environment
-      description: Include exact version numbers as shown in the Jellyfin Dashboard or client.
-      value: |
-        - Jellyfin version:
-        - Stream Generator version and status in Dashboard → Plugins:
-    validations:
-      required: true
+    -   type: textarea
+        id: menu-location
+        attributes:
+            label: Where is the option missing?
+            description: Name (or provide a link to) the page and menu you opened, the item type (movie or episode), and whether it affects all items you tried. Include what changed if the option used to appear.
+        validations:
+            required: true
 
-  - type: textarea
-    id: menu-location
-    attributes:
-      label: Where is the option missing?
-      description: Name (or provide a link to) the page and menu you opened, the item type (movie or episode), and whether it affects all items you tried. Include what changed if the option used to appear.
-    validations:
-      required: true
+    -   type: textarea
+        id: server-logs
+        attributes:
+            label: Jellyfin server startup log
+            description: |
+                Use the log that covers the Jellyfin restart after installing or updating the plugins. It may be in an older log file.
+                Paste entries mentioning `StreamGenerator` or `FileTransformation`, including the `Loaded assembly` line, registration for `*.chunk.js`, and any related errors. If you checked the startup log and found no matching entries, say so.
 
-  - type: textarea
-    id: server-logs
-    attributes:
-      label: Jellyfin server startup log
-      description: |
-        Use the log that covers the Jellyfin restart after installing or updating the plugins. It may be in an older log file.
-        Paste entries mentioning `StreamGenerator` or `FileTransformation`, including the `Loaded assembly` line, registration for `*.chunk.js`, and any related errors. If you checked the startup log and found no matching entries, say so.
-
-  - type: textarea
-    id: browser-diagnostics
-    attributes:
-      label: Browser console and network requests
-      description: |
-        Open DevTools, enable **Disable cache** in **Network**, then reload the affected video page and open its **⋯** menu.
-        Share relevant **Console** errors and the **Network** rows for `*.chunk.js` files and any failed requests. Keep the filename, HTTP status, and cache source if shown.
+    -   type: textarea
+        id: browser-diagnostics
+        attributes:
+            label: Browser console and network requests
+            description: |
+                Open DevTools, enable **Disable cache** in **Network**, then reload the affected video page and open its **⋯** menu.
+                Share relevant **Console** errors and the **Network** rows for `*.chunk.js` files and any failed requests. Keep the filename, HTTP status, and cache source if shown.

@@ -1,4 +1,3 @@
-using Jellyfin.Database.Implementations.Entities;
 using Jellyfin.Plugin.StreamGenerator.Authorization;
 using Jellyfin.Plugin.StreamGenerator.Configuration;
 using MediaBrowser.Controller.Entities;
@@ -19,13 +18,11 @@ internal sealed class PlaybackProgressTracker(
     IMediaSourceManager mediaSourceManager,
     IUserDataManager userDataManager,
     ILogger<PlaybackProgressTracker> logger)
-    : IPlaybackProgressTracker
-{
+    : IPlaybackProgressTracker {
     private const int LockStripeCount = 256;
     private readonly object[] _lockStripes = Enumerable.Range(0, LockStripeCount).Select(_ => new object()).ToArray();
 
-    public async Task<SegmentProgressObservation?> CreateObservationAsync(ActionExecutingContext context)
-    {
+    public async Task<SegmentProgressObservation?> CreateObservationAsync(ActionExecutingContext context) {
         var request = context.HttpContext.Request;
         var configuration = configurationAccessor.Configuration;
         if (configuration is null
@@ -44,16 +41,15 @@ internal sealed class PlaybackProgressTracker(
             || !TryGetLongArgument(context, "runtimeTicks", out var runtimeTicks)
             || runtimeTicks < 0
             || !TryGetLongArgument(context, "actualSegmentLengthTicks", out var segmentLengthTicks)
-            || segmentLengthTicks <= 0)
-        {
+            || segmentLengthTicks <= 0) {
             return null;
         }
 
-        var authorizationInfo = await authorizationContext.GetAuthorizationInfo(context.HttpContext).ConfigureAwait(false);
+        var authorizationInfo =
+            await authorizationContext.GetAuthorizationInfo(context.HttpContext).ConfigureAwait(false);
         if (!authorizationInfo.IsAuthenticated
             || authorizationInfo.UserId != token.UserId
-            || !string.Equals(authorizationInfo.Token, apiKey, StringComparison.Ordinal))
-        {
+            || !string.Equals(authorizationInfo.Token, apiKey, StringComparison.Ordinal)) {
             return null;
         }
 
@@ -63,57 +59,46 @@ internal sealed class PlaybackProgressTracker(
             || item is null
             || scope.MediaSourceId is null
             || !mediaSourceManager.GetStaticMediaSources(item, false, user)
-                .Any(source => string.Equals(source.Id, scope.MediaSourceId, StringComparison.OrdinalIgnoreCase)))
-        {
+                .Any(source => string.Equals(source.Id, scope.MediaSourceId, StringComparison.OrdinalIgnoreCase))) {
             return null;
         }
 
         long positionTicks;
-        try
-        {
+        try {
             positionTicks = checked(runtimeTicks + segmentLengthTicks);
         }
-        catch (OverflowException)
-        {
+        catch (OverflowException) {
             return null;
         }
 
         return new SegmentProgressObservation(token.UserId, tokenItemId, positionTicks);
     }
 
-    public void Track(SegmentProgressObservation observation)
-    {
-        lock (GetLock(observation.UserId, observation.ItemId))
-        {
-            try
-            {
+    public void Track(SegmentProgressObservation observation) {
+        lock (GetLock(observation.UserId, observation.ItemId)) {
+            try {
                 var user = userManager.GetUserById(observation.UserId);
-                if (user is null)
-                {
+                if (user is null) {
                     return;
                 }
 
                 var item = libraryManager.GetItemById<BaseItem>(observation.ItemId, user);
-                if (item is null)
-                {
+                if (item is null) {
                     return;
                 }
 
                 var data = userDataManager.GetUserData(user, item);
-                if (data is null || data.Played || observation.PositionTicks <= data.PlaybackPositionTicks)
-                {
+                if (data is null || data.Played || observation.PositionTicks <= data.PlaybackPositionTicks) {
                     return;
                 }
 
                 var previousPosition = data.PlaybackPositionTicks;
                 var previousPlayed = data.Played;
-                try
-                {
+                try {
                     var playedToCompletion = userDataManager.UpdatePlayState(item, data, observation.PositionTicks);
                     if (!playedToCompletion
                         && data.PlaybackPositionTicks <= previousPosition
-                        && data.Played == previousPlayed)
-                    {
+                        && data.Played == previousPlayed) {
                         data.PlaybackPositionTicks = previousPosition;
                         data.Played = previousPlayed;
                         return;
@@ -126,15 +111,13 @@ internal sealed class PlaybackProgressTracker(
                         playedToCompletion ? UserDataSaveReason.PlaybackFinished : UserDataSaveReason.PlaybackProgress,
                         CancellationToken.None);
                 }
-                catch
-                {
+                catch {
                     data.PlaybackPositionTicks = previousPosition;
                     data.Played = previousPlayed;
                     throw;
                 }
             }
-            catch (Exception ex)
-            {
+            catch (Exception ex) {
                 logger.LogError(
                     ex,
                     "Failed to update generated-link playback progress for user {UserId}, item {ItemId}",
@@ -144,25 +127,21 @@ internal sealed class PlaybackProgressTracker(
         }
     }
 
-    private object GetLock(Guid userId, Guid itemId)
-    {
+    private object GetLock(Guid userId, Guid itemId) {
         var hash = unchecked((uint)HashCode.Combine(userId, itemId));
         return _lockStripes[hash % (uint)_lockStripes.Length];
     }
 
-    private static bool TryGetToken(HttpRequest request, out string token)
-    {
+    private static bool TryGetToken(HttpRequest request, out string token) {
         token = string.Empty;
         var hasLegacyApiKey = request.Query.TryGetValue("api_key", out var legacyApiKeyValues);
         var hasApiKey = request.Query.TryGetValue("ApiKey", out var apiKeyValues);
-        if (hasLegacyApiKey == hasApiKey)
-        {
+        if (hasLegacyApiKey == hasApiKey) {
             return false;
         }
 
         var values = hasApiKey ? apiKeyValues : legacyApiKeyValues;
-        if (values.Count != 1 || string.IsNullOrWhiteSpace(values[0]))
-        {
+        if (values.Count != 1 || string.IsNullOrWhiteSpace(values[0])) {
             return false;
         }
 
@@ -170,16 +149,14 @@ internal sealed class PlaybackProgressTracker(
         return true;
     }
 
-    private static bool TryGetIntArgument(ActionExecutingContext context, string name, out int value)
-    {
+    private static bool TryGetIntArgument(ActionExecutingContext context, string name, out int value) {
         value = 0;
         return context.ActionArguments.TryGetValue(name, out var argument)
                && argument is not null
                && int.TryParse(argument.ToString(), out value);
     }
 
-    private static bool TryGetLongArgument(ActionExecutingContext context, string name, out long value)
-    {
+    private static bool TryGetLongArgument(ActionExecutingContext context, string name, out long value) {
         value = 0;
         return context.ActionArguments.TryGetValue(name, out var argument)
                && argument is not null

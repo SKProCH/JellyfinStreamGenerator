@@ -4,8 +4,8 @@ using System.Text;
 using System.Text.RegularExpressions;
 using Jellyfin.Plugin.StreamGenerator.Progress;
 using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Mvc.Infrastructure;
 using Microsoft.AspNetCore.Mvc.Filters;
+using Microsoft.AspNetCore.Mvc.Infrastructure;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Primitives;
@@ -15,28 +15,24 @@ namespace Jellyfin.Plugin.StreamGenerator;
 public partial class StreamGeneratorSegmentReuseFilter(
     IAdvancedTranscodeManager advancedTranscodeManager,
     IPlaybackProgressTracker playbackProgressTracker,
-    ILogger<StreamGeneratorSegmentReuseFilter> logger) : IAsyncActionFilter
-{
+    ILogger<StreamGeneratorSegmentReuseFilter> logger) : IAsyncActionFilter {
     private const string SessionPrefix = "sg_";
 
-    public async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
-    {
+    public async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next) {
         var request = context.HttpContext.Request;
 
-        if (!TryParseStreamGeneratorSegmentRequest(context, request, out var segmentId, out var configKey, out var requestedSessionId))
-        {
+        if (!TryParseStreamGeneratorSegmentRequest(context, request, out var segmentId, out var configKey,
+                out var requestedSessionId)) {
             await next();
             return;
         }
 
         request.Headers["User-Agent"] = "StreamGenerator/1.0";
         SegmentProgressObservation? progressObservation = null;
-        try
-        {
+        try {
             progressObservation = await playbackProgressTracker.CreateObservationAsync(context).ConfigureAwait(false);
         }
-        catch (Exception ex)
-        {
+        catch (Exception ex) {
             logger.LogError(ex, "Failed to prepare generated-link playback progress tracking");
         }
 
@@ -50,24 +46,21 @@ public partial class StreamGeneratorSegmentReuseFilter(
                         && j.Path != null)
             .ToList();
 
-        string? playSessionId = IsSessionIdForPrefix(requestedSessionId, prefix)
+        var playSessionId = IsSessionIdForPrefix(requestedSessionId, prefix)
             ? requestedSessionId
             : null;
         string? deviceId = null;
 
-        if (playSessionId is not null)
-        {
+        if (playSessionId is not null) {
             var requestedJob = candidateJobs.FirstOrDefault(job =>
                 string.Equals(job.PlaySessionId, playSessionId, StringComparison.OrdinalIgnoreCase));
             deviceId = requestedJob?.DeviceId ?? playSessionId;
         }
 
         // First: check if the segment file already exists on disk for any candidate session
-        foreach (var job in playSessionId is null ? candidateJobs : [])
-        {
+        foreach (var job in playSessionId is null ? candidateJobs : []) {
             var segmentPath = GetSegmentPath(job.Path!, segmentId, context);
-            if (segmentPath != null && File.Exists(segmentPath))
-            {
+            if (segmentPath != null && File.Exists(segmentPath)) {
                 playSessionId = job.PlaySessionId!;
                 deviceId = job.DeviceId ?? playSessionId;
                 logger.LogInformation(
@@ -78,18 +71,15 @@ public partial class StreamGeneratorSegmentReuseFilter(
         }
 
         // Second: check if any active transcode is close enough to produce this segment soon
-        if (playSessionId == null && segmentId >= 0)
-        {
-            foreach (var job in candidateJobs)
-            {
+        if (playSessionId == null && segmentId >= 0) {
+            foreach (var job in candidateJobs) {
                 var currentIndex = GetCurrentTranscodingIndex(job.Path!);
                 if (currentIndex == null) continue;
 
                 var segmentLength = GetSegmentLength(context);
                 var maxGap = 24 / segmentLength;
 
-                if (segmentId >= currentIndex.Value && segmentId - currentIndex.Value <= maxGap)
-                {
+                if (segmentId >= currentIndex.Value && segmentId - currentIndex.Value <= maxGap) {
                     playSessionId = job.PlaySessionId!;
                     deviceId = job.DeviceId ?? playSessionId;
                     logger.LogInformation(
@@ -101,8 +91,7 @@ public partial class StreamGeneratorSegmentReuseFilter(
         }
 
         // Third: new session with random suffix
-        if (playSessionId == null)
-        {
+        if (playSessionId == null) {
             playSessionId = $"{prefix}{Random.Shared.Next():x8}";
             deviceId = playSessionId;
             logger.LogDebug("Assigning new transcode session: {PlaySessionId} for segment {SegmentId}",
@@ -114,8 +103,7 @@ public partial class StreamGeneratorSegmentReuseFilter(
             context.ActionArguments["deviceId"] = deviceId!;
 
         if (context.ActionArguments.TryGetValue("streamOptions", out var optObj)
-            && optObj is Dictionary<string, string> so)
-        {
+            && optObj is Dictionary<string, string> so) {
             if (so.ContainsKey("playSessionId")) so["playSessionId"] = playSessionId;
             if (so.ContainsKey("deviceId")) so["deviceId"] = deviceId!;
         }
@@ -126,15 +114,12 @@ public partial class StreamGeneratorSegmentReuseFilter(
         request.QueryString = QueryString.Create(queryDict);
 
         var executedContext = await next();
-        if (progressObservation.HasValue && WasSuccessful(executedContext))
-        {
+        if (progressObservation.HasValue && WasSuccessful(executedContext)) {
             var response = context.HttpContext.Response;
             var requestAborted = context.HttpContext.RequestAborted;
-            response.OnCompleted(() =>
-            {
+            response.OnCompleted(() => {
                 if (response.StatusCode is >= StatusCodes.Status200OK and < StatusCodes.Status300MultipleChoices
-                    && !requestAborted.IsCancellationRequested)
-                {
+                    && !requestAborted.IsCancellationRequested) {
                     playbackProgressTracker.Track(progressObservation.Value);
                 }
 
@@ -148,8 +133,7 @@ public partial class StreamGeneratorSegmentReuseFilter(
         HttpRequest request,
         out int segmentId,
         out string configKey,
-        out string requestedSessionId)
-    {
+        out string requestedSessionId) {
         segmentId = 0;
         configKey = string.Empty;
         requestedSessionId = string.Empty;
@@ -169,8 +153,7 @@ public partial class StreamGeneratorSegmentReuseFilter(
 
         var playSessionIdStr = psObj?.ToString();
         if (playSessionIdStr is not "stream_generator_random"
-            && !IsStreamGeneratorSessionId(playSessionIdStr))
-        {
+            && !IsStreamGeneratorSessionId(playSessionIdStr)) {
             // Also check query string
             if (!request.Query.TryGetValue("playSessionId", out var qps) || qps.Count != 1)
                 return false;
@@ -184,8 +167,7 @@ public partial class StreamGeneratorSegmentReuseFilter(
         requestedSessionId = playSessionIdStr!;
 
         if (context.ActionArguments.TryGetValue("segmentId", out var segObj)
-            && int.TryParse(segObj?.ToString(), out var sid))
-        {
+            && int.TryParse(segObj?.ToString(), out var sid)) {
             segmentId = sid;
         }
 
@@ -193,17 +175,15 @@ public partial class StreamGeneratorSegmentReuseFilter(
         return true;
     }
 
-    internal static string ComputeConfigKey(ActionExecutingContext context, HttpRequest request)
-    {
+    internal static string ComputeConfigKey(ActionExecutingContext context, HttpRequest request) {
         var itemId = context.RouteData.Values.TryGetValue("itemId", out var id) ? id?.ToString() : "";
-        var excludedKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        {
+        var excludedKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase) {
             "api_key",
             "ApiKey",
             "deviceId",
             "playSessionId",
             "runtimeTicks",
-            "actualSegmentLengthTicks",
+            "actualSegmentLengthTicks"
         };
         var parameters = QueryHelpers.ParseQuery(request.QueryString.Value)
             .Where(parameter => !excludedKeys.Contains(parameter.Key)
@@ -219,8 +199,7 @@ public partial class StreamGeneratorSegmentReuseFilter(
         return Convert.ToHexString(hashBytes)[..12].ToLowerInvariant();
     }
 
-    private static string? GetSegmentPath(string playlistPath, int segmentId, ActionExecutingContext context)
-    {
+    private static string? GetSegmentPath(string playlistPath, int segmentId, ActionExecutingContext context) {
         var folder = Path.GetDirectoryName(playlistPath);
         if (folder == null) return null;
 
@@ -230,34 +209,33 @@ public partial class StreamGeneratorSegmentReuseFilter(
         return Path.Combine(folder, filename + segmentId.ToString(CultureInfo.InvariantCulture) + container);
     }
 
-    private static string GetSegmentContainer(ActionExecutingContext context)
-    {
+    private static string GetSegmentContainer(ActionExecutingContext context) {
         if (context.ActionArguments.TryGetValue("segmentContainer", out var containerObj)
-            && containerObj?.ToString() is { Length: > 0 } container)
-        {
+            && containerObj?.ToString() is { Length: > 0 } container) {
             return "." + NormalizeContainer(container);
         }
 
         return ".ts";
     }
 
-    private static string NormalizeContainer(string container)
-        => container.Trim().TrimStart('.').ToLowerInvariant();
+    private static string NormalizeContainer(string container) {
+        return container.Trim().TrimStart('.').ToLowerInvariant();
+    }
 
-    private static bool IsStreamGeneratorSessionId(string? sessionId)
-        => sessionId is not null && StreamGeneratorSessionRegex().IsMatch(sessionId);
+    private static bool IsStreamGeneratorSessionId(string? sessionId) {
+        return sessionId is not null && StreamGeneratorSessionRegex().IsMatch(sessionId);
+    }
 
-    private static bool IsSessionIdForPrefix(string sessionId, string prefix)
-        => IsStreamGeneratorSessionId(sessionId)
-           && sessionId.StartsWith(prefix, StringComparison.OrdinalIgnoreCase);
+    private static bool IsSessionIdForPrefix(string sessionId, string prefix) {
+        return IsStreamGeneratorSessionId(sessionId)
+               && sessionId.StartsWith(prefix, StringComparison.OrdinalIgnoreCase);
+    }
 
     [GeneratedRegex("^sg_[0-9a-f]{12}_[0-9a-f]{8}$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex StreamGeneratorSessionRegex();
 
-    private static bool WasSuccessful(ActionExecutedContext context)
-    {
-        if (context.Canceled || context.Exception is not null && !context.ExceptionHandled)
-        {
+    private static bool WasSuccessful(ActionExecutedContext context) {
+        if (context.Canceled || (context.Exception is not null && !context.ExceptionHandled)) {
             return false;
         }
 
@@ -265,42 +243,38 @@ public partial class StreamGeneratorSegmentReuseFilter(
                || statusCode is >= StatusCodes.Status200OK and < StatusCodes.Status300MultipleChoices;
     }
 
-    private static int GetSegmentLength(ActionExecutingContext context)
-    {
+    private static int GetSegmentLength(ActionExecutingContext context) {
         if (context.ActionArguments.TryGetValue("segmentLength", out var lenObj)
-            && int.TryParse(lenObj?.ToString(), out var len) && len > 0)
-        {
+            && int.TryParse(lenObj?.ToString(), out var len) && len > 0) {
             return len;
         }
 
         return 6;
     }
 
-    private static int? GetCurrentTranscodingIndex(string playlistPath)
-    {
+    private static int? GetCurrentTranscodingIndex(string playlistPath) {
         var folder = Path.GetDirectoryName(playlistPath);
         if (folder == null || !Directory.Exists(folder)) return null;
 
         var filePrefix = Path.GetFileNameWithoutExtension(playlistPath);
 
-        try
-        {
+        try {
             var lastFile = Directory.EnumerateFiles(folder)
                 .Select(f => Path.GetFileName(f))
                 .Where(f => f.StartsWith(filePrefix, StringComparison.OrdinalIgnoreCase)
                             && !f.EndsWith(".m3u8", StringComparison.OrdinalIgnoreCase))
-                .Select(f =>
-                {
+                .Select(f => {
                     var indexStr = Path.GetFileNameWithoutExtension(f.AsSpan()).Slice(filePrefix.Length);
-                    return int.TryParse(indexStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out var idx) ? idx : (int?)null;
+                    return int.TryParse(indexStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out var idx)
+                        ? idx
+                        : (int?)null;
                 })
                 .Where(i => i.HasValue)
                 .Max();
 
             return lastFile;
         }
-        catch (IOException)
-        {
+        catch (IOException) {
             return null;
         }
     }

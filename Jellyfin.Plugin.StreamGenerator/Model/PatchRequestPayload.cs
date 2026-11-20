@@ -2,8 +2,6 @@
 
 namespace Jellyfin.Plugin.StreamGenerator.Model;
 
-public class PatchRequestPayload
-{
-    [JsonPropertyName("contents")]
-    public string? Contents { get; set; }
+public class PatchRequestPayload {
+    [JsonPropertyName("contents")] public string? Contents { get; set; }
 }

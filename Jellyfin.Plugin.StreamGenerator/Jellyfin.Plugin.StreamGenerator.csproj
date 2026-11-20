@@ -11,18 +11,18 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Jellyfin.Model" Version="12.0.0" />
-    <PackageReference Include="Jellyfin.Controller" Version="12.0.0" />
-    <PackageReference Include="Newtonsoft.Json" Version="13.0.1" />
+    <PackageReference Include="Jellyfin.Model" Version="12.0.0"/>
+    <PackageReference Include="Jellyfin.Controller" Version="12.0.0"/>
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.1"/>
   </ItemGroup>
 
   <ItemGroup>
-    <EmbeddedResource Include="Web\PopupContent.js" />
-    <EmbeddedResource Include="Web\configurationPage.html" />
+    <EmbeddedResource Include="Web\PopupContent.js"/>
+    <EmbeddedResource Include="Web\configurationPage.html"/>
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="Decorators\" />
+    <Folder Include="Decorators\"/>
   </ItemGroup>
 
 </Project>

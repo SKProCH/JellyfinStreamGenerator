@@ -6,11 +6,11 @@ targetAbi: "12.0.0.0"
 framework: "net10.0"
 overview: "Generate stream URLs for Jellyfin media items"
 description: >
-  Allows generating direct stream URLs for media items in Jellyfin.
-  Integrates with the FileTransformation plugin to add a context menu option
-  for generating and copying stream URLs.
+    Allows generating direct stream URLs for media items in Jellyfin.
+    Integrates with the FileTransformation plugin to add a context menu option
+    for generating and copying stream URLs.
 category: "General"
 owner: "SKProCH"
 artifacts:
-  - "Jellyfin.Plugin.StreamGenerator.dll"
+    - "Jellyfin.Plugin.StreamGenerator.dll"
 changelog: ""

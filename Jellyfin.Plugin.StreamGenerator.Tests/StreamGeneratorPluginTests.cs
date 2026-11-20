@@ -2,13 +2,12 @@ using Jellyfin.Plugin.StreamGenerator.Model;
 
 namespace Jellyfin.Plugin.StreamGenerator.Tests;
 
-public class StreamGeneratorPluginTests
-{
+public class StreamGeneratorPluginTests {
     [Fact]
-    public void PatchContextMenu_UsesCommandArgumentsInsteadOfMinifiedNames()
-    {
-        const string source = "function executeCommand(item,id,options){return new Promise(function(resolve,reject){switch(id){case\"copy-stream\":copy();break;}})}" +
-                              "const commands=[{name:\"Download\",id:\"copy-stream\",icon:\"content_copy\"}];";
+    public void PatchContextMenu_UsesCommandArgumentsInsteadOfMinifiedNames() {
+        const string source =
+            "function executeCommand(item,id,options){return new Promise(function(resolve,reject){switch(id){case\"copy-stream\":copy();break;}})}" +
+            "const commands=[{name:\"Download\",id:\"copy-stream\",icon:\"content_copy\"}];";
 
         var result = StreamGeneratorPlugin.PatchContextMenu(new PatchRequestPayload { Contents = source });
 
@@ -22,8 +21,7 @@ public class StreamGeneratorPluginTests
     }
 
     [Fact]
-    public void PatchContextMenu_WhenCopyStreamCommandIsMissing_ReturnsOriginalContent()
-    {
+    public void PatchContextMenu_WhenCopyStreamCommandIsMissing_ReturnsOriginalContent() {
         const string source = "const commands=[];";
 
         var result = StreamGeneratorPlugin.PatchContextMenu(new PatchRequestPayload { Contents = source });
@@ -32,8 +30,7 @@ public class StreamGeneratorPluginTests
     }
 
     [Fact]
-    public void PatchContextMenu_WhenCommandHandlerCannotBeResolved_ReturnsOriginalContent()
-    {
+    public void PatchContextMenu_WhenCommandHandlerCannotBeResolved_ReturnsOriginalContent() {
         const string source = "const commands=[{id:\"copy-stream\",icon:\"content_copy\"}];case\"copy-stream\":break;";
 
         var result = StreamGeneratorPlugin.PatchContextMenu(new PatchRequestPayload { Contents = source });

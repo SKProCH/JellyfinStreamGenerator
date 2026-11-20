@@ -1,5 +1,5 @@
-﻿using Jellyfin.Plugin.StreamGenerator.Decorators;
-using Jellyfin.Plugin.StreamGenerator.Configuration;
+﻿using Jellyfin.Plugin.StreamGenerator.Configuration;
+using Jellyfin.Plugin.StreamGenerator.Decorators;
 using Jellyfin.Plugin.StreamGenerator.Progress;
 using MediaBrowser.Controller;
 using MediaBrowser.Controller.MediaEncoding;
@@ -10,16 +10,16 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Jellyfin.Plugin.StreamGenerator;
 
-public class PluginServiceRegistrator : IPluginServiceRegistrator
-{
-    public void RegisterServices(IServiceCollection serviceCollection, IServerApplicationHost applicationHost)
-    {
+public class PluginServiceRegistrator : IPluginServiceRegistrator {
+    public void RegisterServices(IServiceCollection serviceCollection, IServerApplicationHost applicationHost) {
         serviceCollection.AddSingleton<IStreamGeneratorConfigurationAccessor, StreamGeneratorConfigurationAccessor>();
         serviceCollection.Decorate<IAuthorizationContext, CustomStreamTokensAuthorizationContext>();
         serviceCollection.Decorate<ITranscodeManager, AdvancedTranscodeManager, IAdvancedTranscodeManager>();
         serviceCollection.AddSingleton<IPlaybackProgressTracker, PlaybackProgressTracker>();
-        serviceCollection.Configure<MvcOptions>(opts => opts.Filters.Add<StreamGeneratorMasterPlaylistParametersFilter>());
-        serviceCollection.Configure<MvcOptions>(opts => opts.Filters.Add<StreamGeneratorSegmentReuseFilter>());
+        serviceCollection.Configure<MvcOptions>(opts =>
+            opts.Filters.Add<StreamGeneratorMasterPlaylistParametersFilter>());
+        serviceCollection.Configure<MvcOptions>(opts =>
+            opts.Filters.Add<StreamGeneratorSegmentReuseFilter>());
         serviceCollection.AddSingleton<StreamGeneratorMasterPlaylistParametersFilter>();
         serviceCollection.AddSingleton<StreamGeneratorSegmentReuseFilter>();
     }

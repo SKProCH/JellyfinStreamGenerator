@@ -7,12 +7,13 @@ Find this plugin useful? Consider starring this repository.
 
 ## Why?
 
-Sometimes you need to play video from a Jellyfin in a dumb player (like in games) and this is becoming a pain to do.  
+Sometimes you need to play video from a Jellyfin in a dumb player (like in games) and this is becoming a pain to do.
 
-Jellyfin has the "Copy Stream URL" option, but it doesn't allow for customizing. 
+Jellyfin has the "Copy Stream URL" option, but it doesn't allow for customizing.
 More importantly, it just exposes your token, so everyone who has a link can see it and use it.
 
-This library provides the ability to generate custom HLS stream URLs with separate tokens, allowing for more control and security.
+This library provides the ability to generate custom HLS stream URLs with separate tokens, allowing for more control and
+security.
 
 Inspired by [vrchat-jellyfin](https://github.com/orcachillin/vrchat-jellyfin) but implemented as a Jellyfin plugin.
 
@@ -21,7 +22,9 @@ Inspired by [vrchat-jellyfin](https://github.com/orcachillin/vrchat-jellyfin) bu
 ### Requirements
 
 - **Jellyfin 12.0.x**
-- **Jellyfin File Transformation Plugin**: This plugin relies on [jellyfin-plugin-file-transformation](https://github.com/IAmParadox27/jellyfin-plugin-file-transformation). You must install it on your server first.
+- **Jellyfin File Transformation Plugin**: This plugin relies
+  on [jellyfin-plugin-file-transformation](https://github.com/IAmParadox27/jellyfin-plugin-file-transformation). You
+  must install it on your server first.
 
 ### Via Plugin Repository (recommended)
 
@@ -36,43 +39,51 @@ Inspired by [vrchat-jellyfin](https://github.com/orcachillin/vrchat-jellyfin) bu
 ### Manual Installation
 
 1. Download the latest plugin zip from [GitHub Releases](https://github.com/SKProCH/JellyfinStreamGenerator/releases)
-2. Extract the zip into a new folder inside your Jellyfin server's `plugins` directory, e.g. `<Jellyfin Data Folder>/plugins/StreamGenerator/`
+2. Extract the zip into a new folder inside your Jellyfin server's `plugins` directory, e.g.
+   `<Jellyfin Data Folder>/plugins/StreamGenerator/`
 3. Restart your Jellyfin Server
 
 > [!IMPORTANT]
-> If the **Generate Stream URL** option does not appear after installation, clear the browser cache for the Jellyfin web interface and reload the page.
+> If the **Generate Stream URL** option does not appear after installation, clear the browser cache for the Jellyfin web
+interface and reload the page.
 >
-> In Chrome, open Jellyfin, press `F12`, right-click the browser reload button, select **Empty Cache and Hard Reload**, and then close DevTools.
+> In Chrome, open Jellyfin, press `F12`, right-click the browser reload button, select **Empty Cache and Hard Reload**,
+> and then close DevTools.
 
 ## My other plugins
 
-[JellyfinReplayGain](https://github.com/SKProCH/JellyfinReplayGain) - measures and adjusts volume on the fly during transcoding without modifying media files
+[JellyfinReplayGain](https://github.com/SKProCH/JellyfinReplayGain) - measures and adjusts volume on the fly during
+transcoding without modifying media files
 
 ## Versioning
 
-Plugin versions use the format `x.y.z.N`. The last digit (`N`) is the preview build number — `0` indicates a stable release.
+Plugin versions use the format `x.y.z.N`. The last digit (`N`) is the preview build number — `0` indicates a stable
+release.
 
 ## Features
+
 - Adds a new button "Generate Stream URL" for a video item  
   <img width="239" height="128" alt="image" src="https://github.com/user-attachments/assets/229c4263-4050-45ba-be9f-4decf36497ac" />
 - Provides a GUI popup with selectable options:
-  - Video/audio reencoding for compatibility
-  - Video/audio/subtitle stream track selection
-  - Bitrate selection
-  - Subtitle burning method (HLS, Encode, Embed)
-  - Subtitle offset when burning subtitles into video
-  - Container selection (fMP4/TS)
-  - Copy Timestamps
-  - Remember watch progress for your account when you watching something via StreamGenerator links
-  - etc  
-  <img width="1119" height="751" alt="image" src="https://github.com/user-attachments/assets/8c41e555-3768-4385-ad54-06320af9c617" />
+    - Video/audio reencoding for compatibility
+    - Video/audio/subtitle stream track selection
+    - Bitrate selection
+    - Subtitle burning method (HLS, Encode, Embed)
+    - Subtitle offset when burning subtitles into video
+    - Container selection (fMP4/TS)
+    - Copy Timestamps
+    - Remember watch progress for your account when you watching something via StreamGenerator links
+    - etc  
+      <img width="1119" height="751" alt="image" src="https://github.com/user-attachments/assets/8c41e555-3768-4385-ad54-06320af9c617" />
 - Generates a `master.m3u8` playlist URL mimicking an API call
 - Generates a unique token for each generated URL, without exposing your Jellyfin token  
   <img width="616" height="659" alt="image" src="https://github.com/user-attachments/assets/36785259-834f-4f92-94c0-d77eb898a777" />
 - Serves the already transcoded video parts if available to avoid unnecessary transcoding for multiple users
 
 ## Building from source
+
 ```bash
 dotnet build
 ```
+
 The compiled library will be available at `bin/Debug/net10.0/Jellyfin.Plugin.StreamGenerator.dll`

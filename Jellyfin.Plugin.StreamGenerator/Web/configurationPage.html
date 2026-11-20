@@ -7,23 +7,24 @@
             <form class="streamGeneratorConfigForm">
                 <div class="checkboxContainer checkboxContainer-withDescription">
                     <label class="emby-checkbox-label">
-                        <input is="emby-checkbox" type="checkbox" id="chkIsEnabled" />
+                        <input id="chkIsEnabled" is="emby-checkbox" type="checkbox"/>
                         <span>Enable custom stream tokens</span>
                     </label>
                     <div class="fieldDescription">
-                        When enabled, allows generating custom tokens when generating URLs to avoid exposing your Jellyfin token.
+                        When enabled, allows generating custom tokens when generating URLs to avoid exposing your
+                        Jellyfin token.
                     </div>
                 </div>
 
                 <div class="inputContainer" style="margin-top: 1.5em;">
                     <label class="inputLabel" for="txtDefaultDuration">Default token duration (hours):</label>
-                    <input is="emby-input" type="number" id="txtDefaultDuration" step="any" min="0" class="emby-input" />
+                    <input class="emby-input" id="txtDefaultDuration" is="emby-input" min="0" step="any" type="number"/>
                     <div class="fieldDescription">Leave empty for infinite.</div>
                 </div>
 
                 <div class="checkboxContainer checkboxContainer-withDescription">
                     <label class="emby-checkbox-label">
-                        <input is="emby-checkbox" type="checkbox" id="chkRememberPlaybackProgress" />
+                        <input id="chkRememberPlaybackProgress" is="emby-checkbox" type="checkbox"/>
                         <span>Remember playback progress by default</span>
                     </label>
                     <div class="fieldDescription">
@@ -33,7 +34,7 @@
 
                 <div class="inputContainer">
                     <label class="inputLabel" for="txtMaxDuration">Max token duration (hours):</label>
-                    <input is="emby-input" type="number" id="txtMaxDuration" step="any" min="0" class="emby-input" />
+                    <input class="emby-input" id="txtMaxDuration" is="emby-input" min="0" step="any" type="number"/>
                     <div class="fieldDescription">Leave empty for infinite.</div>
                 </div>
 
@@ -61,10 +62,12 @@
                     cursor: pointer;
                     transition: all 0.2s ease;
                 }
+
                 .revoke-btn:hover {
                     background: rgba(255, 77, 77, 0.1);
                     border-color: #ff4d4d;
                 }
+
                 .revoke-btn:active {
                     background: rgba(255, 77, 77, 0.2);
                 }
@@ -76,7 +79,9 @@
                         <option value="all">All Users</option>
                     </select>
                 </div>
-                <button is="emby-button" type="button" class="raised button-submit emby-button" id="btnRevokeAll" style="background: #cc0000; margin-left: 15px; padding: 0.6em 1.5em; width: auto;">
+                <button class="raised button-submit emby-button" id="btnRevokeAll" is="emby-button"
+                        style="background: #cc0000; margin-left: 15px; padding: 0.6em 1.5em; width: auto;"
+                        type="button">
                     Revoke All
                 </button>
             </div>
@@ -110,21 +115,21 @@
 
                         html += '<div class="listItem listItem-border">' +
                             '<div class="listItemBody">' +
-                                '<div class="listItemBodyText" style="font-weight: 500;">' + (token.ItemName || 'Unknown Item') + '</div>' +
-                                '<div class="listItemBodyText secondary" style="margin-top: 4px;">' +
-                                    'User: ' + (token.UserName || 'Unknown') + ' | ' +
-                                    'Expires: ' + expiresDate + expiredStr + ' | ' +
-                                    'Progress: ' + (token.RememberPlaybackProgress ? 'Enabled' : 'Disabled') +
-                                '</div>' +
-                                '<div class="listItemBodyText secondary" style="font-family: monospace; font-size: 0.9em; margin-top: 2px;">' +
-                                    'Token: ' + token.Token +
-                                '</div>' +
+                            '<div class="listItemBodyText" style="font-weight: 500;">' + (token.ItemName || 'Unknown Item') + '</div>' +
+                            '<div class="listItemBodyText secondary" style="margin-top: 4px;">' +
+                            'User: ' + (token.UserName || 'Unknown') + ' | ' +
+                            'Expires: ' + expiresDate + expiredStr + ' | ' +
+                            'Progress: ' + (token.RememberPlaybackProgress ? 'Enabled' : 'Disabled') +
+                            '</div>' +
+                            '<div class="listItemBodyText secondary" style="font-family: monospace; font-size: 0.9em; margin-top: 2px;">' +
+                            'Token: ' + token.Token +
+                            '</div>' +
                             '</div>' +
                             '<button type="button" class="revoke-btn" ' +
-                                    'onclick="window.StreamGeneratorRevokeToken(\'' + token.Token + '\')" title="Revoke Token">' +
-                                '<i class="material-icons delete" style="color:#ff4d4d; font-size:1.5em; margin:0;"></i>' +
+                            'onclick="window.StreamGeneratorRevokeToken(\'' + token.Token + '\')" title="Revoke Token">' +
+                            '<i class="material-icons delete" style="color:#ff4d4d; font-size:1.5em; margin:0;"></i>' +
                             '</button>' +
-                        '</div>';
+                            '</div>';
                     });
                 }
                 tokenList.innerHTML = html;
@@ -180,7 +185,7 @@
                 });
             }
 
-            window.StreamGeneratorRevokeToken = function(token) {
+            window.StreamGeneratorRevokeToken = function (token) {
                 ApiClient.ajax({
                     type: 'DELETE',
                     url: ApiClient.getUrl('StreamGenerator/Tokens/' + token)

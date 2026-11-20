@@ -1,3 +1,4 @@
+using Jellyfin.Database.Implementations.Entities;
 using Jellyfin.Plugin.StreamGenerator.Configuration;
 using Jellyfin.Plugin.StreamGenerator.Controllers;
 using MediaBrowser.Controller.Library;
@@ -8,17 +9,14 @@ using Moq;
 
 namespace Jellyfin.Plugin.StreamGenerator.Tests.Controllers;
 
-public class StreamTokenControllerTests
-{
+public class StreamTokenControllerTests {
     [Fact]
-    public void GetSettings_ReturnsConfiguredValues()
-    {
-        var configuration = new PluginConfiguration
-        {
+    public void GetSettings_ReturnsConfiguredValues() {
+        var configuration = new PluginConfiguration {
             GenerateCustomApiTokens = false,
             RememberPlaybackProgressByDefault = false,
             DefaultCustomTokenDurationHours = 12,
-            MaxCustomTokenDurationHours = 24,
+            MaxCustomTokenDurationHours = 24
         };
         var fixture = CreateFixture(configuration);
 
@@ -32,8 +30,7 @@ public class StreamTokenControllerTests
     }
 
     [Fact]
-    public void GetSettings_WithoutConfiguration_ReturnsServiceUnavailable()
-    {
+    public void GetSettings_WithoutConfiguration_ReturnsServiceUnavailable() {
         var fixture = CreateFixture(null);
 
         fixture.Subject.GetSettings().Result.Should().BeOfType<StatusCodeResult>()
@@ -41,8 +38,7 @@ public class StreamTokenControllerTests
     }
 
     [Fact]
-    public async Task GenerateToken_UsesAuthenticatedUserClampsDurationAndSaves()
-    {
+    public async Task GenerateToken_UsesAuthenticatedUserClampsDurationAndSaves() {
         var userId = Guid.NewGuid();
         var itemId = Guid.NewGuid();
         var configuration = new PluginConfiguration { MaxCustomTokenDurationHours = 24 };
@@ -62,8 +58,7 @@ public class StreamTokenControllerTests
     }
 
     [Fact]
-    public async Task GenerateToken_ExplicitProgressSettingOverridesDefault()
-    {
+    public async Task GenerateToken_ExplicitProgressSettingOverridesDefault() {
         var configuration = new PluginConfiguration { RememberPlaybackProgressByDefault = true };
         var fixture = CreateFixture(configuration, Guid.NewGuid());
 
@@ -74,8 +69,7 @@ public class StreamTokenControllerTests
     }
 
     [Fact]
-    public void RevokeToken_ExistingToken_RemovesAndSaves()
-    {
+    public void RevokeToken_ExistingToken_RemovesAndSaves() {
         var configuration = new PluginConfiguration();
         configuration.StreamTokens["token"] = CreateToken(Guid.NewGuid());
         var fixture = CreateFixture(configuration);
@@ -87,8 +81,7 @@ public class StreamTokenControllerTests
     }
 
     [Fact]
-    public void RevokeToken_MissingToken_DoesNotSave()
-    {
+    public void RevokeToken_MissingToken_DoesNotSave() {
         var fixture = CreateFixture(new PluginConfiguration());
 
         fixture.Subject.RevokeToken("missing").Should().BeOfType<NoContentResult>();
@@ -97,8 +90,7 @@ public class StreamTokenControllerTests
     }
 
     [Fact]
-    public void RevokeTokensBulk_RemovesOnlyRequestedUsersTokens()
-    {
+    public void RevokeTokensBulk_RemovesOnlyRequestedUsersTokens() {
         var userId = Guid.NewGuid();
         var otherUserId = Guid.NewGuid();
         var configuration = new PluginConfiguration();
@@ -113,8 +105,7 @@ public class StreamTokenControllerTests
     }
 
     [Fact]
-    public void GetTokens_ReturnsNewestFirstAndExpiration()
-    {
+    public void GetTokens_ReturnsNewestFirstAndExpiration() {
         var configuration = new PluginConfiguration();
         var old = CreateToken(Guid.NewGuid(), DateTimeOffset.UtcNow.AddDays(-2), TimeSpan.FromHours(1));
         var recent = CreateToken(Guid.NewGuid(), DateTimeOffset.UtcNow.AddHours(-1), null);
@@ -130,18 +121,16 @@ public class StreamTokenControllerTests
         tokens[1].ExpiresAt.Should().Be(old.CreatedAt + old.Duration);
     }
 
-    private static Fixture CreateFixture(PluginConfiguration? configuration, Guid? userId = null)
-    {
+    private static Fixture CreateFixture(PluginConfiguration? configuration, Guid? userId = null) {
         var authorizationContext = new Mock<IAuthorizationContext>();
         authorizationContext.Setup(x => x.GetAuthorizationInfo(It.IsAny<HttpContext>()))
-            .ReturnsAsync(new AuthorizationInfo
-            {
-                User = userId.HasValue ? new Jellyfin.Database.Implementations.Entities.User("test", "auth", "reset") : null,
+            .ReturnsAsync(new AuthorizationInfo {
+                User = userId.HasValue ? new User("test", "auth", "reset") : null
             });
-        if (userId.HasValue)
-        {
-            var info = authorizationContext.Object.GetAuthorizationInfo(new DefaultHttpContext()).GetAwaiter().GetResult();
-            typeof(Jellyfin.Database.Implementations.Entities.User).GetProperty("Id")!.SetValue(info.User, userId.Value);
+        if (userId.HasValue) {
+            var info = authorizationContext.Object.GetAuthorizationInfo(new DefaultHttpContext()).GetAwaiter()
+                .GetResult();
+            typeof(User).GetProperty("Id")!.SetValue(info.User, userId.Value);
             authorizationContext.Setup(x => x.GetAuthorizationInfo(It.IsAny<HttpContext>())).ReturnsAsync(info);
         }
 
@@ -151,9 +140,8 @@ public class StreamTokenControllerTests
             authorizationContext.Object,
             new Mock<ILibraryManager>().Object,
             new Mock<IUserManager>().Object,
-            accessor.Object)
-        {
-            ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() },
+            accessor.Object) {
+            ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() }
         };
         return new Fixture(subject, accessor);
     }
@@ -161,14 +149,14 @@ public class StreamTokenControllerTests
     private static StreamTokenInformation CreateToken(
         Guid userId,
         DateTimeOffset? createdAt = null,
-        TimeSpan? duration = null)
-        => new()
-        {
+        TimeSpan? duration = null) {
+        return new StreamTokenInformation {
             UserId = userId,
             ItemId = Guid.NewGuid().ToString("N"),
             CreatedAt = createdAt ?? DateTimeOffset.UtcNow,
-            Duration = duration,
+            Duration = duration
         };
+    }
 
     private sealed record Fixture(
         StreamTokenController Subject,

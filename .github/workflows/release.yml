@@ -1,201 +1,201 @@
 name: Release Stream Generator Plugin
 
 on:
-  push:
-    tags:
-      - 'v*.*.*'
-      - 'v*.*.*.*'
-      - '!v*-*'
+    push:
+        tags:
+            - 'v*.*.*'
+            - 'v*.*.*.*'
+            - '!v*-*'
 
 permissions:
-  contents: read
+    contents: read
 
 jobs:
-  ci:
-    uses: ./.github/workflows/build.yml
-    permissions:
-      contents: read
+    ci:
+        uses: ./.github/workflows/build.yml
+        permissions:
+            contents: read
+    
+    build:
+        needs: ci
+        runs-on: ubuntu-latest
+        outputs:
+            version: ${{ steps.version.outputs.version }}
+        steps:
+            -   name: Checkout
+                uses: actions/checkout@v4
+            -   name: Setup .NET
+                uses: actions/setup-dotnet@v4
+                with:
+                    dotnet-version: '10.0.x'
+            -   name: Resolve version
+                id: version
+                shell: bash
+                run: |
+                    set -euo pipefail
+                    if [[ ! "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
+                      echo "Only three- or four-part numeric version tags are supported: v<major>.<minor>.<build>[.<revision>]" >&2
+                      exit 1
+                    fi
+                    VERSION="${GITHUB_REF_NAME#v}"
+                    if [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+                      VERSION+=".0"
+                    fi
+                    echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+            -   name: Build Jellyfin Plugin
+                uses: oddstr13/jellyfin-plugin-repository-manager@v1.1.1
+                id: jprm
+                with:
+                    dotnet-target: net10.0
+                    version: ${{ steps.version.outputs.version }}
+            -   name: Upload artifact
+                uses: actions/upload-artifact@v4
+                with:
+                    name: stream-generator-build-artifact
+                    retention-days: 30
+                    if-no-files-found: error
+                    path: ${{ steps.jprm.outputs.artifact }}
+    
+    release:
+        needs: build
+        runs-on: ubuntu-latest
+        permissions:
+            contents: write
+        steps:
+            -   uses: actions/download-artifact@v4
+                with:
+                    name: stream-generator-build-artifact
+                    path: ./release-assets
+            -   name: Create GitHub Release
+                uses: softprops/action-gh-release@v2
+                with:
+                    tag_name: ${{ github.ref_name }}
+                    files: ./release-assets/*.zip
+                    fail_on_unmatched_files: true
+                    generate_release_notes: true
+                    prerelease: false
+    
+    publish-manifest:
+        needs: [ build, release ]
+        runs-on: ubuntu-latest
+        permissions:
+            contents: write
+            pages: write
+            id-token: write
+        concurrency:
+            group: stream-generator-pages
+            cancel-in-progress: false
+        environment:
+            name: github-pages
+            url: ${{ steps.deployment.outputs.page_url }}
+        steps:
+            -   uses: actions/checkout@v4
+            -   uses: actions/download-artifact@v4
+                with:
+                    name: stream-generator-build-artifact
+                    path: ./release-assets
+            -   name: Build manifests
+                env:
+                    GH_TOKEN: ${{ github.token }}
+                shell: bash
+                run: |
+                    set -euo pipefail
+                    CHANGELOG=$(gh release view "$GITHUB_REF_NAME" \
+                      --repo "$GITHUB_REPOSITORY" --json body --jq '.body // ""')
+                    if [[ -z "${CHANGELOG//[[:space:]]/}" ]]; then
+                      gh release edit "$GITHUB_REF_NAME" \
+                        --repo "$GITHUB_REPOSITORY" --generate-notes
+                      CHANGELOG=$(gh release view "$GITHUB_REF_NAME" \
+                        --repo "$GITHUB_REPOSITORY" --json body --jq '.body // ""')
+                    fi
+                    mkdir -p pages/artifacts
+                    PAGES_URL="https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}"
+                    MANIFEST_STATUS=$(curl -sS -L --retry 3 --retry-all-errors \
+                      --connect-timeout 10 --max-time 60 \
+                      -o pages/manifest.json -w '%{http_code}' \
+                      "${PAGES_URL}/manifest.json")
+                    if [[ "$MANIFEST_STATUS" == "404" ]]; then
+                      echo '[]' > pages/manifest.json
+                    elif [[ "$MANIFEST_STATUS" != "200" ]]; then
+                      echo "Failed to download the existing manifest (HTTP $MANIFEST_STATUS)" >&2
+                      exit 1
+                    fi
+                    if ! jq -e 'type == "array"' pages/manifest.json >/dev/null 2>&1; then
+                      echo 'Existing manifest is not a JSON array' >&2
+                      exit 1
+                    fi
+                    ZIP_FILE=$(find ./release-assets -maxdepth 1 -name '*.zip' -print -quit)
+                    if [[ -z "$ZIP_FILE" ]]; then
+                      echo "No plugin ZIP artifact found" >&2
+                      exit 1
+                    fi
+                    ZIP_NAME=$(basename "$ZIP_FILE")
+                    CHECKSUM=$(md5sum "$ZIP_FILE" | awk '{print $1}')
+                    TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+                    VERSION="${{ needs.build.outputs.version }}"
+                    SOURCE_URL="https://github.com/${{ github.repository }}/releases/download/${GITHUB_REF_NAME}/${ZIP_NAME}"
+                    
+                    yaml_scalar() {
+                      awk -v key="$1" '
+                        $0 ~ "^" key ":[[:space:]]*" {
+                          value=$0
+                          sub("^[^:]+:[[:space:]]*", "", value)
+                          sub(/^"/, "", value)
+                          sub(/"$/, "", value)
+                          print value
+                          exit
+                        }
+                      ' build.yaml
+                    }
+                    yaml_description() {
+                      awk '
+                        /^description: *>/ { in_description=1; next }
+                        in_description && /^[^[:space:]]/ { exit }
+                        in_description {
+                          line=$0
+                          sub(/^  /, "", line)
+                          if (line != "") {
+                            if (description != "") description = description " "
+                            description = description line
+                          }
+                        }
+                        END { print description }
+                      ' build.yaml
+                    }
+                    GUID=$(yaml_scalar guid)
+                    NAME=$(yaml_scalar name)
+                    DESCRIPTION=$(yaml_description)
+                    OVERVIEW=$(yaml_scalar overview)
+                    OWNER=$(yaml_scalar owner)
+                    CATEGORY=$(yaml_scalar category)
+                    TARGET_ABI=$(yaml_scalar targetAbi)
+                    NEW_VERSION=$(jq -n \
+                      --arg ver "$VERSION" \
+                      --arg changelog "$CHANGELOG" \
+                      --arg targetAbi "$TARGET_ABI" \
+                      --arg sourceUrl "$SOURCE_URL" \
+                      --arg checksum "$CHECKSUM" \
+                      --arg timestamp "$TIMESTAMP" \
+                      '{version:$ver,changelog:$changelog,targetAbi:$targetAbi,sourceUrl:$sourceUrl,checksum:$checksum,timestamp:$timestamp}')
+                    jq 'map(.versions = [(.versions // [])[] | select(((.sourceUrl? // "") | contains("/artifacts/")) | not)]) | map(select((.versions | length) > 0))' \
+                      pages/manifest.json > pages/manifest.tmp
+                    mv pages/manifest.tmp pages/manifest.json
+                    if [ "$(jq --arg guid "$GUID" 'map(select(.guid == $guid)) | length' pages/manifest.json)" -gt 0 ]; then
+                      jq --arg guid "$GUID" --argjson newver "$NEW_VERSION" \
+                        'map(if .guid == $guid then .versions = ([$newver] + [(.versions // [])[] | select(.version != $newver.version)]) else . end)' \
+                        pages/manifest.json > pages/manifest.tmp
+                    else
+                      jq --arg guid "$GUID" --arg name "$NAME" --arg description "$DESCRIPTION" \
+                        --arg overview "$OVERVIEW" --arg owner "$OWNER" --arg category "$CATEGORY" \
+                        --argjson newver "$NEW_VERSION" \
+                        '. += [{guid:$guid,name:$name,description:$description,overview:$overview,owner:$owner,category:$category,versions:[$newver]}]' \
+                        pages/manifest.json > pages/manifest.tmp
+                    fi
+                    mv pages/manifest.tmp pages/manifest.json
 
-  build:
-    needs: ci
-    runs-on: ubuntu-latest
-    outputs:
-      version: ${{ steps.version.outputs.version }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '10.0.x'
-      - name: Resolve version
-        id: version
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [[ ! "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
-            echo "Only three- or four-part numeric version tags are supported: v<major>.<minor>.<build>[.<revision>]" >&2
-            exit 1
-          fi
-          VERSION="${GITHUB_REF_NAME#v}"
-          if [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            VERSION+=".0"
-          fi
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-      - name: Build Jellyfin Plugin
-        uses: oddstr13/jellyfin-plugin-repository-manager@v1.1.1
-        id: jprm
-        with:
-          dotnet-target: net10.0
-          version: ${{ steps.version.outputs.version }}
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: stream-generator-build-artifact
-          retention-days: 30
-          if-no-files-found: error
-          path: ${{ steps.jprm.outputs.artifact }}
-
-  release:
-    needs: build
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: stream-generator-build-artifact
-          path: ./release-assets
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ github.ref_name }}
-          files: ./release-assets/*.zip
-          fail_on_unmatched_files: true
-          generate_release_notes: true
-          prerelease: false
-
-  publish-manifest:
-    needs: [build, release]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      pages: write
-      id-token: write
-    concurrency:
-      group: stream-generator-pages
-      cancel-in-progress: false
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
-        with:
-          name: stream-generator-build-artifact
-          path: ./release-assets
-      - name: Build manifests
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          CHANGELOG=$(gh release view "$GITHUB_REF_NAME" \
-            --repo "$GITHUB_REPOSITORY" --json body --jq '.body // ""')
-          if [[ -z "${CHANGELOG//[[:space:]]/}" ]]; then
-            gh release edit "$GITHUB_REF_NAME" \
-              --repo "$GITHUB_REPOSITORY" --generate-notes
-            CHANGELOG=$(gh release view "$GITHUB_REF_NAME" \
-              --repo "$GITHUB_REPOSITORY" --json body --jq '.body // ""')
-          fi
-          mkdir -p pages/artifacts
-          PAGES_URL="https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}"
-          MANIFEST_STATUS=$(curl -sS -L --retry 3 --retry-all-errors \
-            --connect-timeout 10 --max-time 60 \
-            -o pages/manifest.json -w '%{http_code}' \
-            "${PAGES_URL}/manifest.json")
-          if [[ "$MANIFEST_STATUS" == "404" ]]; then
-            echo '[]' > pages/manifest.json
-          elif [[ "$MANIFEST_STATUS" != "200" ]]; then
-            echo "Failed to download the existing manifest (HTTP $MANIFEST_STATUS)" >&2
-            exit 1
-          fi
-          if ! jq -e 'type == "array"' pages/manifest.json >/dev/null 2>&1; then
-            echo 'Existing manifest is not a JSON array' >&2
-            exit 1
-          fi
-          ZIP_FILE=$(find ./release-assets -maxdepth 1 -name '*.zip' -print -quit)
-          if [[ -z "$ZIP_FILE" ]]; then
-            echo "No plugin ZIP artifact found" >&2
-            exit 1
-          fi
-          ZIP_NAME=$(basename "$ZIP_FILE")
-          CHECKSUM=$(md5sum "$ZIP_FILE" | awk '{print $1}')
-          TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-          VERSION="${{ needs.build.outputs.version }}"
-          SOURCE_URL="https://github.com/${{ github.repository }}/releases/download/${GITHUB_REF_NAME}/${ZIP_NAME}"
-
-          yaml_scalar() {
-            awk -v key="$1" '
-              $0 ~ "^" key ":[[:space:]]*" {
-                value=$0
-                sub("^[^:]+:[[:space:]]*", "", value)
-                sub(/^"/, "", value)
-                sub(/"$/, "", value)
-                print value
-                exit
-              }
-            ' build.yaml
-          }
-          yaml_description() {
-            awk '
-              /^description: *>/ { in_description=1; next }
-              in_description && /^[^[:space:]]/ { exit }
-              in_description {
-                line=$0
-                sub(/^  /, "", line)
-                if (line != "") {
-                  if (description != "") description = description " "
-                  description = description line
-                }
-              }
-              END { print description }
-            ' build.yaml
-          }
-          GUID=$(yaml_scalar guid)
-          NAME=$(yaml_scalar name)
-          DESCRIPTION=$(yaml_description)
-          OVERVIEW=$(yaml_scalar overview)
-          OWNER=$(yaml_scalar owner)
-          CATEGORY=$(yaml_scalar category)
-          TARGET_ABI=$(yaml_scalar targetAbi)
-          NEW_VERSION=$(jq -n \
-            --arg ver "$VERSION" \
-            --arg changelog "$CHANGELOG" \
-            --arg targetAbi "$TARGET_ABI" \
-            --arg sourceUrl "$SOURCE_URL" \
-            --arg checksum "$CHECKSUM" \
-            --arg timestamp "$TIMESTAMP" \
-            '{version:$ver,changelog:$changelog,targetAbi:$targetAbi,sourceUrl:$sourceUrl,checksum:$checksum,timestamp:$timestamp}')
-          jq 'map(.versions = [(.versions // [])[] | select(((.sourceUrl? // "") | contains("/artifacts/")) | not)]) | map(select((.versions | length) > 0))' \
-            pages/manifest.json > pages/manifest.tmp
-          mv pages/manifest.tmp pages/manifest.json
-          if [ "$(jq --arg guid "$GUID" 'map(select(.guid == $guid)) | length' pages/manifest.json)" -gt 0 ]; then
-            jq --arg guid "$GUID" --argjson newver "$NEW_VERSION" \
-              'map(if .guid == $guid then .versions = ([$newver] + [(.versions // [])[] | select(.version != $newver.version)]) else . end)' \
-              pages/manifest.json > pages/manifest.tmp
-          else
-            jq --arg guid "$GUID" --arg name "$NAME" --arg description "$DESCRIPTION" \
-              --arg overview "$OVERVIEW" --arg owner "$OWNER" --arg category "$CATEGORY" \
-              --argjson newver "$NEW_VERSION" \
-              '. += [{guid:$guid,name:$name,description:$description,overview:$overview,owner:$owner,category:$category,versions:[$newver]}]' \
-              pages/manifest.json > pages/manifest.tmp
-          fi
-          mv pages/manifest.tmp pages/manifest.json
-
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: pages
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+            -   uses: actions/upload-pages-artifact@v3
+                with:
+                    path: pages
+            -   name: Deploy to GitHub Pages
+                id: deployment
+                uses: actions/deploy-pages@v4

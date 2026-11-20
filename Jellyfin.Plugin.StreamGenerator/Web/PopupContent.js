@@ -9,13 +9,35 @@ var showStreamGeneratorPopup = function (itemId, serverId) {
         return;
     }
 
-    const escapeHtml = value => String(value ?? '').replace(/[&<>'"]/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[character]));
+    const escapeHtml = value => String(value ?? '').replace(/[&<>'"]/g, character => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        "'": '&#39;',
+        '"': '&quot;'
+    }[character]));
     const showToast = message => {
         const toast = document.createElement('div');
         toast.textContent = message;
-        Object.assign(toast.style, { position: 'fixed', bottom: '20px', left: '50%', transform: 'translateX(-50%)', backgroundColor: '#333', color: '#fff', padding: '10px 20px', borderRadius: '20px', zIndex: '100000', fontSize: '14px', boxShadow: '0 2px 10px rgba(0,0,0,.5)' });
+        Object.assign(toast.style, {
+            position: 'fixed',
+            bottom: '20px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            backgroundColor: '#333',
+            color: '#fff',
+            padding: '10px 20px',
+            borderRadius: '20px',
+            zIndex: '100000',
+            fontSize: '14px',
+            boxShadow: '0 2px 10px rgba(0,0,0,.5)'
+        });
         document.body.appendChild(toast);
-        setTimeout(() => { toast.style.transition = 'opacity .5s'; toast.style.opacity = '0'; setTimeout(() => toast.remove(), 500); }, 2500);
+        setTimeout(() => {
+            toast.style.transition = 'opacity .5s';
+            toast.style.opacity = '0';
+            setTimeout(() => toast.remove(), 500);
+        }, 2500);
     };
     const formatBitrate = bitrate => bitrate >= 1000000 ? (bitrate / 1000000).toFixed(bitrate % 1000000 ? 2 : 0) + ' Mbps' : Math.round(bitrate / 1000) + ' Kbps';
     const codecName = codec => codec ? codec.toUpperCase() : 'unknown format';
@@ -90,18 +112,53 @@ var showStreamGeneratorPopup = function (itemId, serverId) {
         const defaultSubtitleMethod = autoSubtitle ? (canVideoTranscode ? 'Encode' : 'Hls') : 'Drop';
 
         const overlay = document.createElement('div');
-        Object.assign(overlay.style, { position: 'fixed', inset: '0', backgroundColor: 'rgba(0,0,0,.7)', zIndex: '99999', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'sans-serif' });
+        Object.assign(overlay.style, {
+            position: 'fixed',
+            inset: '0',
+            backgroundColor: 'rgba(0,0,0,.7)',
+            zIndex: '99999',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontFamily: 'sans-serif'
+        });
         const modal = document.createElement('div');
         modal.className = 'sg-modal';
-        Object.assign(modal.style, { backgroundColor: '#1e1e1e', color: '#fff', padding: '20px', borderRadius: '8px', boxSizing: 'border-box', width: 'min(1120px, calc(100vw - 32px))', maxWidth: 'none', maxHeight: '92vh', overflowY: 'auto', boxShadow: '0 4px 20px rgba(0,0,0,.5)' });
+        Object.assign(modal.style, {
+            backgroundColor: '#1e1e1e',
+            color: '#fff',
+            padding: '20px',
+            borderRadius: '8px',
+            boxSizing: 'border-box',
+            width: 'min(1120px, calc(100vw - 32px))',
+            maxWidth: 'none',
+            maxHeight: '92vh',
+            overflowY: 'auto',
+            boxShadow: '0 4px 20px rgba(0,0,0,.5)'
+        });
         const selectStyle = 'width:100%;padding:8px;margin-top:5px;margin-bottom:8px;background:#333;color:#fff;border:1px solid #444;border-radius:4px;box-sizing:border-box;';
         const presetHours = [1, 6, 12, 24, 72, 168, 360, 720];
-        const presetLabels = { 1: '1 Hour', 6: '6 Hours', 12: '12 Hours', 24: '1 Day', 72: '3 Days', 168: '7 Days', 360: '15 Days', 720: '30 Days' };
+        const presetLabels = {
+            1: '1 Hour',
+            6: '6 Hours',
+            12: '12 Hours',
+            24: '1 Day',
+            72: '3 Days',
+            168: '7 Days',
+            360: '15 Days',
+            720: '30 Days'
+        };
         const maxDuration = settings.MaxTokenDurationHours;
         const defaultDuration = settings.DefaultTokenDurationHours;
         const validDurations = presetHours.filter(hours => maxDuration == null || hours <= maxDuration);
-        if (maxDuration != null && !validDurations.includes(maxDuration)) { validDurations.push(maxDuration); presetLabels[maxDuration] = maxDuration + ' Hours (Max)'; }
-        if (defaultDuration != null && !validDurations.includes(defaultDuration) && (maxDuration == null || defaultDuration <= maxDuration)) { validDurations.push(defaultDuration); presetLabels[defaultDuration] = defaultDuration + ' Hours (Default)'; }
+        if (maxDuration != null && !validDurations.includes(maxDuration)) {
+            validDurations.push(maxDuration);
+            presetLabels[maxDuration] = maxDuration + ' Hours (Max)';
+        }
+        if (defaultDuration != null && !validDurations.includes(defaultDuration) && (maxDuration == null || defaultDuration <= maxDuration)) {
+            validDurations.push(defaultDuration);
+            presetLabels[defaultDuration] = defaultDuration + ' Hours (Default)';
+        }
         validDurations.sort((left, right) => left - right);
         const durationOptions = validDurations.map(hours => '<option value="' + hours + '"' + (hours === defaultDuration ? ' selected' : '') + '>' + (presetLabels[hours] || hours + ' Hours') + '</option>').join('') + (maxDuration == null ? '<option value=""' + (defaultDuration == null ? ' selected' : '') + '>Infinite</option>' : '');
 
@@ -132,7 +189,9 @@ var showStreamGeneratorPopup = function (itemId, serverId) {
         subtitleOffset.addEventListener('input', () => {
             if (subtitleOffset.value !== '' && Number.isFinite(subtitleOffset.valueAsNumber)) subtitleOffsetSlider.value = subtitleOffset.value;
         });
-        subtitleOffsetSlider.addEventListener('input', () => { subtitleOffset.value = subtitleOffsetSlider.value; });
+        subtitleOffsetSlider.addEventListener('input', () => {
+            subtitleOffset.value = subtitleOffsetSlider.value;
+        });
         const videoCompatibility = modal.querySelector('#videoCompatibility');
         let videoCompatibilitySelected = videoCompatibility.checked;
         const audioCompatibility = modal.querySelector('#audioCompatibility');
@@ -195,17 +254,48 @@ var showStreamGeneratorPopup = function (itemId, serverId) {
         };
 
         modal.querySelector('#btnCancel').addEventListener('click', closePopup);
-        modal.querySelector('#btnMaxCompatibility').addEventListener('click', () => { if (canVideoTranscode) videoCompatibilitySelected = true; if (canAudioTranscode) audioCompatibility.checked = true; updateState(); });
-        videoSelect.addEventListener('change', () => { updateBitrate(); updateState(); });
-        audioSelect.addEventListener('change', () => { autoSubtitle = findAutoSubtitle(selectedAudio()?.Index); autoSubtitleIndex = autoSubtitle?.Index ?? null; subtitleSelect.querySelector('option[value="auto"]').textContent = autoSubtitleLabel(); if (subtitleSelect.value === 'auto') subtitleMethod.value = autoSubtitle ? (canVideoTranscode ? 'Encode' : 'Hls') : 'Drop'; updateState(); });
-        videoCompatibility.addEventListener('change', () => { videoCompatibilitySelected = videoCompatibility.checked; updateState(); });
+        modal.querySelector('#btnMaxCompatibility').addEventListener('click', () => {
+            if (canVideoTranscode) videoCompatibilitySelected = true;
+            if (canAudioTranscode) audioCompatibility.checked = true;
+            updateState();
+        });
+        videoSelect.addEventListener('change', () => {
+            updateBitrate();
+            updateState();
+        });
+        audioSelect.addEventListener('change', () => {
+            autoSubtitle = findAutoSubtitle(selectedAudio()?.Index);
+            autoSubtitleIndex = autoSubtitle?.Index ?? null;
+            subtitleSelect.querySelector('option[value="auto"]').textContent = autoSubtitleLabel();
+            if (subtitleSelect.value === 'auto') subtitleMethod.value = autoSubtitle ? (canVideoTranscode ? 'Encode' : 'Hls') : 'Drop';
+            updateState();
+        });
+        videoCompatibility.addEventListener('change', () => {
+            videoCompatibilitySelected = videoCompatibility.checked;
+            updateState();
+        });
         audioCompatibility.addEventListener('change', updateState);
         segmentContainerSelect.addEventListener('change', updateSegmentContainer);
         subtitleMethod.addEventListener('change', updateState);
-        subtitleSelect.addEventListener('change', event => { if (event.target.value === 'auto') subtitleMethod.value = autoSubtitleIndex == null ? 'Drop' : (canVideoTranscode ? 'Encode' : 'Hls'); if (event.target.value === '-1') subtitleMethod.value = 'Drop'; updateState(); });
-        bitrateSlider?.addEventListener('input', event => { const value = Number(event.target.value); const source = selectedVideo()?.BitRate; bitrateDisplay.textContent = value === Number(bitrateSlider.max) ? (source ? '· ' + formatBitrate(source) + ' (source)' : '· source bitrate unknown') : '· ' + formatBitrate(value); });
-        overlay.addEventListener('click', event => { if (event.target === overlay) closePopup(); });
-        document.addEventListener('keydown', function escape(event) { if (event.key === 'Escape') { document.removeEventListener('keydown', escape); closePopup(); } });
+        subtitleSelect.addEventListener('change', event => {
+            if (event.target.value === 'auto') subtitleMethod.value = autoSubtitleIndex == null ? 'Drop' : (canVideoTranscode ? 'Encode' : 'Hls');
+            if (event.target.value === '-1') subtitleMethod.value = 'Drop';
+            updateState();
+        });
+        bitrateSlider?.addEventListener('input', event => {
+            const value = Number(event.target.value);
+            const source = selectedVideo()?.BitRate;
+            bitrateDisplay.textContent = value === Number(bitrateSlider.max) ? (source ? '· ' + formatBitrate(source) + ' (source)' : '· source bitrate unknown') : '· ' + formatBitrate(value);
+        });
+        overlay.addEventListener('click', event => {
+            if (event.target === overlay) closePopup();
+        });
+        document.addEventListener('keydown', function escape(event) {
+            if (event.key === 'Escape') {
+                document.removeEventListener('keydown', escape);
+                closePopup();
+            }
+        });
         updateBitrate();
         updateState();
 
@@ -220,7 +310,12 @@ var showStreamGeneratorPopup = function (itemId, serverId) {
             if ((videoNeedsConversion || subtitleNeedsConversion) && !canVideoTranscode) errors.push('Video transcoding is not allowed for this user.');
             if (audioNeedsConversion && !canAudioTranscode) errors.push('Audio transcoding is not allowed for this user.');
             if (!videoNeedsConversion && !audioNeedsConversion && !subtitleNeedsConversion && !canRemux) errors.push('Playback remuxing is not allowed for this user.');
-            if (errors.length) { const error = modal.querySelector('#compatibilityError'); error.textContent = errors.join(' '); error.style.display = 'block'; return; }
+            if (errors.length) {
+                const error = modal.querySelector('#compatibilityError');
+                error.textContent = errors.join(' ');
+                error.style.display = 'block';
+                return;
+            }
             modal.querySelector('button[type="submit"]').disabled = true;
             const selectedBitrate = Number(bitrateSlider?.value);
             const maxVideoBitrate = canVideoTranscode && selectedBitrate !== Number(bitrateSlider?.max) ? selectedBitrate : null;
@@ -228,24 +323,71 @@ var showStreamGeneratorPopup = function (itemId, serverId) {
             const effectiveSubtitleIndex = subtitleSelection === 'auto' ? autoSubtitleIndex : subtitleSelection === '-1' ? -1 : subtitleSelection;
             const effectiveSubtitleMethod = subtitleSelection === 'auto' ? (autoSubtitleIndex == null ? 'Drop' : subtitleMethod.value) : subtitleSelection === '-1' ? 'Drop' : subtitleMethod.value;
             const selectedContainer = segmentContainerSelect.value === 'auto' ? getAutomaticContainer() : segmentContainerSelect.value;
-            const queryParams = new URLSearchParams({ deviceId: 'stream_generator', playSessionId: 'stream_generator_random', api_key: '', mediaSourceId: mediaSource.Id, static: false, enableAutoStreamCopy: true, allowVideoStreamCopy: true, allowAudioStreamCopy: true, copyTimestamps: modal.querySelector('#copyTimestamps').checked, segmentContainer: selectedContainer, videoStreamIndex: video.Index });
+            const queryParams = new URLSearchParams({
+                deviceId: 'stream_generator',
+                playSessionId: 'stream_generator_random',
+                api_key: '',
+                mediaSourceId: mediaSource.Id,
+                static: false,
+                enableAutoStreamCopy: true,
+                allowVideoStreamCopy: true,
+                allowAudioStreamCopy: true,
+                copyTimestamps: modal.querySelector('#copyTimestamps').checked,
+                segmentContainer: selectedContainer,
+                videoStreamIndex: video.Index
+            });
             if (maxVideoBitrate !== null) queryParams.set('videoBitrate', maxVideoBitrate);
             if (videoNeedsConversion || subtitleNeedsConversion) queryParams.set('videoCodec', 'h264');
             if (audioNeedsConversion) queryParams.set('audioCodec', 'aac');
             if (audioSelect.value !== '') queryParams.set('audioStreamIndex', audioSelect.value);
-            if (effectiveSubtitleIndex !== null) { queryParams.set('subtitleStreamIndex', effectiveSubtitleIndex); queryParams.set('subtitleMethod', effectiveSubtitleMethod); const subtitleOffset = Number(modal.querySelector('#subtitleOffset').value); if (Number.isFinite(subtitleOffset) && subtitleOffset !== 0 && effectiveSubtitleMethod === 'Encode') queryParams.set('subtitleOffset', subtitleOffset); }
-            const buildUrl = apiKey => { queryParams.set('api_key', apiKey); const url = apiClient.serverAddress() + '/Videos/' + normalizedItemId + '/master.m3u8?' + queryParams.toString(); if (navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(url).then(() => showToast('URL copied to clipboard')); const area = document.createElement('textarea'); area.value = url; area.style.position = 'fixed'; area.style.left = '-999999px'; document.body.appendChild(area); area.select(); try { document.execCommand('copy'); showToast('URL copied to clipboard'); } catch (error) { showToast('Failed to copy'); } area.remove(); return Promise.resolve(); };
+            if (effectiveSubtitleIndex !== null) {
+                queryParams.set('subtitleStreamIndex', effectiveSubtitleIndex);
+                queryParams.set('subtitleMethod', effectiveSubtitleMethod);
+                const subtitleOffset = Number(modal.querySelector('#subtitleOffset').value);
+                if (Number.isFinite(subtitleOffset) && subtitleOffset !== 0 && effectiveSubtitleMethod === 'Encode') queryParams.set('subtitleOffset', subtitleOffset);
+            }
+            const buildUrl = apiKey => {
+                queryParams.set('api_key', apiKey);
+                const url = apiClient.serverAddress() + '/Videos/' + normalizedItemId + '/master.m3u8?' + queryParams.toString();
+                if (navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(url).then(() => showToast('URL copied to clipboard'));
+                const area = document.createElement('textarea');
+                area.value = url;
+                area.style.position = 'fixed';
+                area.style.left = '-999999px';
+                document.body.appendChild(area);
+                area.select();
+                try {
+                    document.execCommand('copy');
+                    showToast('URL copied to clipboard');
+                } catch (error) {
+                    showToast('Failed to copy');
+                }
+                area.remove();
+                return Promise.resolve();
+            };
             const finish = () => {
                 if (!settings.GenerateCustomApiTokens) return buildUrl(apiClient.accessToken());
-                const tokenQuery = { itemId: normalizedItemId, rememberPlaybackProgress: modal.querySelector('#rememberPlaybackProgress')?.checked ?? settings.RememberPlaybackProgressByDefault !== false };
+                const tokenQuery = {
+                    itemId: normalizedItemId,
+                    rememberPlaybackProgress: modal.querySelector('#rememberPlaybackProgress')?.checked ?? settings.RememberPlaybackProgressByDefault !== false
+                };
                 const duration = modal.querySelector('#tokenDurationHours').value;
                 if (duration !== '') tokenQuery.durationHours = duration;
-                return apiClient.fetch({ type: 'POST', url: apiClient.getUrl('StreamGenerator/GenerateToken', tokenQuery), dataType: 'text' })
+                return apiClient.fetch({
+                    type: 'POST',
+                    url: apiClient.getUrl('StreamGenerator/GenerateToken', tokenQuery),
+                    dataType: 'text'
+                })
                     .then(token => buildUrl(token.replace(/^"|"$/g, '')))
                     .catch(() => buildUrl(apiClient.accessToken()));
             };
-            finish().catch(() => showToast('Failed to generate stream URL.')).finally(() => { modal.querySelector('button[type="submit"]').disabled = false; });
+            finish().catch(() => showToast('Failed to generate stream URL.')).finally(() => {
+                modal.querySelector('button[type="submit"]').disabled = false;
+            });
         });
-    }).catch(error => { console.error('StreamGenerator: Failed to load popup data', error); showToast('Failed to load stream options.'); });
+    }).catch(error => {
+        console.error('StreamGenerator: Failed to load popup data', error);
+        showToast('Failed to load stream options.');
+    });
 };
 window.showStreamGeneratorPopup = showStreamGeneratorPopup;

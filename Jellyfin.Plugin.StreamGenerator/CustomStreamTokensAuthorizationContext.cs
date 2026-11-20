@@ -17,18 +17,18 @@ public class CustomStreamTokensAuthorizationContext(
     IMediaSourceManager mediaSourceManager,
     IStreamGeneratorConfigurationAccessor configurationAccessor,
     ILogger<CustomStreamTokensAuthorizationContext> logger)
-    : IAuthorizationContext
-{
-    public Task<AuthorizationInfo> GetAuthorizationInfo(HttpContext requestContext)
-        => TryAuthorizeByToken(requestContext.Request)
-           ?? inner.GetAuthorizationInfo(requestContext);
+    : IAuthorizationContext {
+    public Task<AuthorizationInfo> GetAuthorizationInfo(HttpContext requestContext) {
+        return TryAuthorizeByToken(requestContext.Request)
+               ?? inner.GetAuthorizationInfo(requestContext);
+    }
 
-    public Task<AuthorizationInfo> GetAuthorizationInfo(HttpRequest requestContext)
-        => TryAuthorizeByToken(requestContext)
-           ?? inner.GetAuthorizationInfo(requestContext);
+    public Task<AuthorizationInfo> GetAuthorizationInfo(HttpRequest requestContext) {
+        return TryAuthorizeByToken(requestContext)
+               ?? inner.GetAuthorizationInfo(requestContext);
+    }
 
-    private Task<AuthorizationInfo>? TryAuthorizeByToken(HttpRequest request)
-    {
+    private Task<AuthorizationInfo>? TryAuthorizeByToken(HttpRequest request) {
         var config = configurationAccessor.Configuration;
         if (config is null) return null;
 
@@ -47,15 +47,15 @@ public class CustomStreamTokensAuthorizationContext(
         if (!config.StreamTokens.TryGetValue(apiKey, out var token))
             return null;
 
-        if (token.IsExpired())
-        {
-            logger.LogWarning("Stream token {TokenId} for user {UserId} is expired", GetTokenFingerprint(apiKey), token.UserId);
+        if (token.IsExpired()) {
+            logger.LogWarning("Stream token {TokenId} for user {UserId} is expired", GetTokenFingerprint(apiKey),
+                token.UserId);
             return null;
         }
 
-        if (!StreamTokenPathScope.TryParse(request, out var scope) || scope is null)
-        {
-            logger.LogWarning("Stream token {TokenId} cannot access path {RequestPath}", GetTokenFingerprint(apiKey), request.Path);
+        if (!StreamTokenPathScope.TryParse(request, out var scope) || scope is null) {
+            logger.LogWarning("Stream token {TokenId} cannot access path {RequestPath}", GetTokenFingerprint(apiKey),
+                request.Path);
             return null;
         }
 
@@ -71,8 +71,7 @@ public class CustomStreamTokensAuthorizationContext(
 
         if (scope.MediaSourceId is not null
             && !mediaSourceManager.GetStaticMediaSources(item, false, user)
-                .Any(source => string.Equals(source.Id, scope.MediaSourceId, StringComparison.OrdinalIgnoreCase)))
-        {
+                .Any(source => string.Equals(source.Id, scope.MediaSourceId, StringComparison.OrdinalIgnoreCase))) {
             return null;
         }
 
@@ -82,18 +81,18 @@ public class CustomStreamTokensAuthorizationContext(
             ? queryDeviceId[0]!
             : $"StreamGenerator-{GetTokenFingerprint(apiKey)}";
 
-        return Task.FromResult(new AuthorizationInfo
-        {
+        return Task.FromResult(new AuthorizationInfo {
             IsAuthenticated = true,
             User = user,
             Token = apiKey,
             IsApiKey = true,
             DeviceId = deviceId,
             Device = "StreamGenerator",
-            Client = "StreamGenerator",
+            Client = "StreamGenerator"
         });
     }
 
-    private static string GetTokenFingerprint(string token)
-        => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(token)))[..12].ToLowerInvariant();
+    private static string GetTokenFingerprint(string token) {
+        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(token)))[..12].ToLowerInvariant();
+    }
 }

@@ -10,17 +10,16 @@ using Moq;
 
 namespace Jellyfin.Plugin.StreamGenerator.Tests.Authorization;
 
-public class CustomStreamTokensAuthorizationContextTests
-{
-    private static readonly Guid ItemId = Guid.Parse("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+public class CustomStreamTokensAuthorizationContextTests {
     private const string Token = "11111111111111111111111111111111";
     private const string MediaSourceId = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+    private static readonly Guid ItemId = Guid.Parse("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
 
     [Fact]
-    public async Task GetAuthorizationInfo_ValidToken_ReturnsScopedUser()
-    {
+    public async Task GetAuthorizationInfo_ValidToken_ReturnsScopedUser() {
         var fixture = CreateFixture();
-        var context = CreateContext($"/Videos/{ItemId:N}/master.m3u8", $"?api_key={Token}&mediaSourceId={MediaSourceId}");
+        var context = CreateContext($"/Videos/{ItemId:N}/master.m3u8",
+            $"?api_key={Token}&mediaSourceId={MediaSourceId}");
 
         var result = await fixture.Subject.GetAuthorizationInfo(context);
 
@@ -33,8 +32,7 @@ public class CustomStreamTokensAuthorizationContextTests
     }
 
     [Fact]
-    public async Task GetAuthorizationInfo_ExplicitDeviceId_UsesIt()
-    {
+    public async Task GetAuthorizationInfo_ExplicitDeviceId_UsesIt() {
         var fixture = CreateFixture();
         var context = CreateContext(
             $"/Videos/{ItemId:N}/master.m3u8",
@@ -47,8 +45,7 @@ public class CustomStreamTokensAuthorizationContextTests
     }
 
     [Fact]
-    public async Task GetAuthorizationInfo_MediaSourceBelongsToSameItem_AuthorizesAlternateVersion()
-    {
+    public async Task GetAuthorizationInfo_MediaSourceBelongsToSameItem_AuthorizesAlternateVersion() {
         const string alternateSource = "cccccccccccccccccccccccccccccccc";
         var fixture = CreateFixture(false, MediaSourceId, alternateSource);
         var context = CreateContext(
@@ -61,8 +58,7 @@ public class CustomStreamTokensAuthorizationContextTests
     }
 
     [Fact]
-    public async Task GetAuthorizationInfo_MediaSourceDoesNotBelongToItem_DelegatesToInner()
-    {
+    public async Task GetAuthorizationInfo_MediaSourceDoesNotBelongToItem_DelegatesToInner() {
         var fixture = CreateFixture();
         var context = CreateContext(
             $"/Videos/{ItemId:N}/Trickplay/320/1.jpg",
@@ -75,8 +71,7 @@ public class CustomStreamTokensAuthorizationContextTests
     }
 
     [Fact]
-    public async Task GetAuthorizationInfo_OtherItem_DelegatesToInner()
-    {
+    public async Task GetAuthorizationInfo_OtherItem_DelegatesToInner() {
         var fixture = CreateFixture();
         var otherItem = Guid.NewGuid();
         var context = CreateContext(
@@ -89,8 +84,7 @@ public class CustomStreamTokensAuthorizationContextTests
     }
 
     [Fact]
-    public async Task GetAuthorizationInfo_DuplicateApiKey_DelegatesToInner()
-    {
+    public async Task GetAuthorizationInfo_DuplicateApiKey_DelegatesToInner() {
         var fixture = CreateFixture();
         var context = CreateContext(
             $"/Videos/{ItemId:N}/master.m3u8",
@@ -102,8 +96,7 @@ public class CustomStreamTokensAuthorizationContextTests
     }
 
     [Fact]
-    public async Task GetAuthorizationInfo_CaseVariedApiKeyName_Authorizes()
-    {
+    public async Task GetAuthorizationInfo_CaseVariedApiKeyName_Authorizes() {
         var fixture = CreateFixture();
         var context = CreateContext(
             $"/Videos/{ItemId:N}/master.m3u8",
@@ -115,8 +108,7 @@ public class CustomStreamTokensAuthorizationContextTests
     }
 
     [Fact]
-    public async Task GetAuthorizationInfo_CaseVariedDuplicateApiKey_DelegatesToInner()
-    {
+    public async Task GetAuthorizationInfo_CaseVariedDuplicateApiKey_DelegatesToInner() {
         var fixture = CreateFixture();
         var context = CreateContext(
             $"/Videos/{ItemId:N}/master.m3u8",
@@ -128,8 +120,7 @@ public class CustomStreamTokensAuthorizationContextTests
     }
 
     [Fact]
-    public async Task GetAuthorizationInfo_DuplicateDeviceId_UsesFingerprintFallback()
-    {
+    public async Task GetAuthorizationInfo_DuplicateDeviceId_UsesFingerprintFallback() {
         var fixture = CreateFixture();
         var context = CreateContext(
             $"/Videos/{ItemId:N}/master.m3u8",
@@ -142,9 +133,8 @@ public class CustomStreamTokensAuthorizationContextTests
     }
 
     [Fact]
-    public async Task GetAuthorizationInfo_ExpiredToken_DelegatesToInner()
-    {
-        var fixture = CreateFixture(expired: true);
+    public async Task GetAuthorizationInfo_ExpiredToken_DelegatesToInner() {
+        var fixture = CreateFixture(true);
         var context = CreateContext(
             $"/Videos/{ItemId:N}/master.m3u8",
             $"?api_key={Token}&mediaSourceId={MediaSourceId}");
@@ -154,10 +144,8 @@ public class CustomStreamTokensAuthorizationContextTests
         result.Should().BeSameAs(fixture.Fallback);
     }
 
-    private static Fixture CreateFixture(bool expired = false, params string[] mediaSourceIds)
-    {
-        if (mediaSourceIds.Length == 0)
-        {
+    private static Fixture CreateFixture(bool expired = false, params string[] mediaSourceIds) {
+        if (mediaSourceIds.Length == 0) {
             mediaSourceIds = [MediaSourceId];
         }
 
@@ -180,12 +168,11 @@ public class CustomStreamTokensAuthorizationContextTests
             .Returns(mediaSourceIds.Select(id => new MediaSourceInfo { Id = id }).ToArray());
 
         var configuration = new PluginConfiguration();
-        configuration.StreamTokens[Token] = new StreamTokenInformation
-        {
+        configuration.StreamTokens[Token] = new StreamTokenInformation {
             UserId = user.Id,
             ItemId = ItemId.ToString("N"),
             CreatedAt = expired ? DateTimeOffset.UtcNow.AddHours(-2) : DateTimeOffset.UtcNow,
-            Duration = expired ? TimeSpan.FromHours(1) : null,
+            Duration = expired ? TimeSpan.FromHours(1) : null
         };
 
         var accessor = new Mock<IStreamGeneratorConfigurationAccessor>();
@@ -202,8 +189,7 @@ public class CustomStreamTokensAuthorizationContextTests
         return new Fixture(subject, inner, user, fallback);
     }
 
-    private static DefaultHttpContext CreateContext(string path, string query)
-    {
+    private static DefaultHttpContext CreateContext(string path, string query) {
         var context = new DefaultHttpContext();
         context.Request.Method = "GET";
         context.Request.Path = path;

@@ -17,16 +17,14 @@ using Moq;
 
 namespace Jellyfin.Plugin.StreamGenerator.Tests.Progress;
 
-public class PlaybackProgressTrackerTests
-{
-    private static readonly Guid ItemId = Guid.Parse("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+public class PlaybackProgressTrackerTests {
     private const string Token = "11111111111111111111111111111111";
     private const string MediaSourceId = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+    private static readonly Guid ItemId = Guid.Parse("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
 
     [Fact]
-    public async Task CreateObservationAsync_EnabledToken_UsesEndOfSegment()
-    {
-        var fixture = CreateFixture(rememberProgress: true);
+    public async Task CreateObservationAsync_EnabledToken_UsesEndOfSegment() {
+        var fixture = CreateFixture();
         var context = CreateActionContext(runtimeTicks: 120_000_000, segmentLengthTicks: 60_000_000);
 
         var observation = await fixture.Subject.CreateObservationAsync(context);
@@ -41,17 +39,15 @@ public class PlaybackProgressTrackerTests
     public async Task CreateObservationAsync_DisabledOrNonMediaSegment_ReturnsNull(
         bool rememberProgress,
         int segmentId,
-        long segmentLengthTicks)
-    {
+        long segmentLengthTicks) {
         var fixture = CreateFixture(rememberProgress);
-        var context = CreateActionContext(segmentId: segmentId, segmentLengthTicks: segmentLengthTicks);
+        var context = CreateActionContext(segmentId, segmentLengthTicks: segmentLengthTicks);
 
         (await fixture.Subject.CreateObservationAsync(context)).Should().BeNull();
     }
 
     [Fact]
-    public async Task CreateObservationAsync_RequestAuthenticatedWithAnotherToken_ReturnsNull()
-    {
+    public async Task CreateObservationAsync_RequestAuthenticatedWithAnotherToken_ReturnsNull() {
         var fixture = CreateFixture(authorizationToken: "different-token");
 
         var observation = await fixture.Subject.CreateObservationAsync(CreateActionContext());
@@ -60,8 +56,7 @@ public class PlaybackProgressTrackerTests
     }
 
     [Fact]
-    public async Task CreateObservationAsync_MediaSourceOutsideItem_ReturnsNull()
-    {
+    public async Task CreateObservationAsync_MediaSourceOutsideItem_ReturnsNull() {
         var fixture = CreateFixture(mediaSourceIds: ["different-source"]);
 
         var observation = await fixture.Subject.CreateObservationAsync(CreateActionContext());
@@ -70,8 +65,7 @@ public class PlaybackProgressTrackerTests
     }
 
     [Fact]
-    public void Track_HigherPosition_UpdatesAndSavesProgress()
-    {
+    public void Track_HigherPosition_UpdatesAndSavesProgress() {
         var data = new UserItemData { Key = "key", PlaybackPositionTicks = 60_000_000 };
         var fixture = CreateFixture(data: data);
         fixture.UserDataManager
@@ -83,28 +77,29 @@ public class PlaybackProgressTrackerTests
 
         data.PlaybackPositionTicks.Should().Be(120_000_000);
         fixture.UserDataManager.Verify(
-            x => x.SaveUserData(fixture.User, fixture.Item, data, UserDataSaveReason.PlaybackProgress, CancellationToken.None),
+            x => x.SaveUserData(fixture.User, fixture.Item, data, UserDataSaveReason.PlaybackProgress,
+                CancellationToken.None),
             Times.Once);
     }
 
     [Fact]
-    public void Track_LowerPosition_DoesNotRegressOrSave()
-    {
+    public void Track_LowerPosition_DoesNotRegressOrSave() {
         var data = new UserItemData { Key = "key", PlaybackPositionTicks = 120_000_000 };
         var fixture = CreateFixture(data: data);
 
         fixture.Subject.Track(new SegmentProgressObservation(fixture.User.Id, ItemId, 60_000_000));
 
         data.PlaybackPositionTicks.Should().Be(120_000_000);
-        fixture.UserDataManager.Verify(x => x.UpdatePlayState(It.IsAny<BaseItem>(), It.IsAny<UserItemData>(), It.IsAny<long?>()), Times.Never);
         fixture.UserDataManager.Verify(
-            x => x.SaveUserData(It.IsAny<User>(), It.IsAny<BaseItem>(), It.IsAny<UserItemData>(), It.IsAny<UserDataSaveReason>(), It.IsAny<CancellationToken>()),
+            x => x.UpdatePlayState(It.IsAny<BaseItem>(), It.IsAny<UserItemData>(), It.IsAny<long?>()), Times.Never);
+        fixture.UserDataManager.Verify(
+            x => x.SaveUserData(It.IsAny<User>(), It.IsAny<BaseItem>(), It.IsAny<UserItemData>(),
+                It.IsAny<UserDataSaveReason>(), It.IsAny<CancellationToken>()),
             Times.Never);
     }
 
     [Fact]
-    public void Track_AlreadyPlayedItem_RemainsCompleted()
-    {
+    public void Track_AlreadyPlayedItem_RemainsCompleted() {
         var data = new UserItemData { Key = "key", Played = true, PlaybackPositionTicks = 0 };
         var fixture = CreateFixture(data: data);
 
@@ -112,18 +107,17 @@ public class PlaybackProgressTrackerTests
 
         data.Played.Should().BeTrue();
         data.PlaybackPositionTicks.Should().Be(0);
-        fixture.UserDataManager.Verify(x => x.UpdatePlayState(It.IsAny<BaseItem>(), It.IsAny<UserItemData>(), It.IsAny<long?>()), Times.Never);
+        fixture.UserDataManager.Verify(
+            x => x.UpdatePlayState(It.IsAny<BaseItem>(), It.IsAny<UserItemData>(), It.IsAny<long?>()), Times.Never);
     }
 
     [Fact]
-    public void Track_JellyfinCompletion_SavesPlaybackFinishedAndKeepsResetPosition()
-    {
+    public void Track_JellyfinCompletion_SavesPlaybackFinishedAndKeepsResetPosition() {
         var data = new UserItemData { Key = "key", PlaybackPositionTicks = 800_000_000 };
         var fixture = CreateFixture(data: data);
         fixture.UserDataManager
             .Setup(x => x.UpdatePlayState(fixture.Item, data, 950_000_000))
-            .Callback(() =>
-            {
+            .Callback(() => {
                 data.Played = true;
                 data.PlaybackPositionTicks = 0;
             })
@@ -134,13 +128,13 @@ public class PlaybackProgressTrackerTests
         data.Played.Should().BeTrue();
         data.PlaybackPositionTicks.Should().Be(0);
         fixture.UserDataManager.Verify(
-            x => x.SaveUserData(fixture.User, fixture.Item, data, UserDataSaveReason.PlaybackFinished, CancellationToken.None),
+            x => x.SaveUserData(fixture.User, fixture.Item, data, UserDataSaveReason.PlaybackFinished,
+                CancellationToken.None),
             Times.Once);
     }
 
     [Fact]
-    public void Track_JellyfinRejectedNormalization_RestoresPreviousState()
-    {
+    public void Track_JellyfinRejectedNormalization_RestoresPreviousState() {
         var data = new UserItemData { Key = "key", PlaybackPositionTicks = 60_000_000 };
         var fixture = CreateFixture(data: data);
         fixture.UserDataManager
@@ -152,25 +146,25 @@ public class PlaybackProgressTrackerTests
 
         data.PlaybackPositionTicks.Should().Be(60_000_000);
         fixture.UserDataManager.Verify(
-            x => x.SaveUserData(It.IsAny<User>(), It.IsAny<BaseItem>(), It.IsAny<UserItemData>(), It.IsAny<UserDataSaveReason>(), It.IsAny<CancellationToken>()),
+            x => x.SaveUserData(It.IsAny<User>(), It.IsAny<BaseItem>(), It.IsAny<UserItemData>(),
+                It.IsAny<UserDataSaveReason>(), It.IsAny<CancellationToken>()),
             Times.Never);
     }
 
     [Fact]
-    public void Track_SaveFailure_RestoresCachedState()
-    {
+    public void Track_SaveFailure_RestoresCachedState() {
         var data = new UserItemData { Key = "key", PlaybackPositionTicks = 60_000_000 };
         var fixture = CreateFixture(data: data);
         fixture.UserDataManager
             .Setup(x => x.UpdatePlayState(fixture.Item, data, 950_000_000))
-            .Callback(() =>
-            {
+            .Callback(() => {
                 data.Played = true;
                 data.PlaybackPositionTicks = 0;
             })
             .Returns(true);
         fixture.UserDataManager
-            .Setup(x => x.SaveUserData(fixture.User, fixture.Item, data, UserDataSaveReason.PlaybackFinished, CancellationToken.None))
+            .Setup(x => x.SaveUserData(fixture.User, fixture.Item, data, UserDataSaveReason.PlaybackFinished,
+                CancellationToken.None))
             .Throws(new InvalidOperationException("save failed"));
 
         fixture.Subject.Track(new SegmentProgressObservation(fixture.User.Id, ItemId, 950_000_000));
@@ -180,8 +174,7 @@ public class PlaybackProgressTrackerTests
     }
 
     [Fact]
-    public async Task Track_ConcurrentOutOfOrderSegments_EndsAtHighestPosition()
-    {
+    public async Task Track_ConcurrentOutOfOrderSegments_EndsAtHighestPosition() {
         var data = new UserItemData { Key = "key" };
         var fixture = CreateFixture(data: data);
         fixture.UserDataManager
@@ -191,7 +184,8 @@ public class PlaybackProgressTrackerTests
 
         await Task.WhenAll(
             Task.Run(() => fixture.Subject.Track(new SegmentProgressObservation(fixture.User.Id, ItemId, 600_000_000))),
-            Task.Run(() => fixture.Subject.Track(new SegmentProgressObservation(fixture.User.Id, ItemId, 540_000_000))));
+            Task.Run(() =>
+                fixture.Subject.Track(new SegmentProgressObservation(fixture.User.Id, ItemId, 540_000_000))));
 
         data.PlaybackPositionTicks.Should().Be(600_000_000);
     }
@@ -200,29 +194,27 @@ public class PlaybackProgressTrackerTests
         bool rememberProgress = true,
         UserItemData? data = null,
         string authorizationToken = Token,
-        string[]? mediaSourceIds = null)
-    {
+        string[]? mediaSourceIds = null) {
         var user = new User("test", "auth", "reset");
         var item = new Mock<BaseItem>().Object;
         data ??= new UserItemData { Key = "key" };
         var configuration = new PluginConfiguration();
-        configuration.StreamTokens[Token] = new StreamTokenInformation
-        {
+        configuration.StreamTokens[Token] = new StreamTokenInformation {
             UserId = user.Id,
             ItemId = ItemId.ToString("N"),
             RememberPlaybackProgress = rememberProgress,
-            CreatedAt = DateTimeOffset.UtcNow,
+            CreatedAt = DateTimeOffset.UtcNow
         };
 
         var configurationAccessor = new Mock<IStreamGeneratorConfigurationAccessor>();
         configurationAccessor.SetupGet(x => x.Configuration).Returns(configuration);
         var authorizationContext = new Mock<IAuthorizationContext>();
-        authorizationContext.Setup(x => x.GetAuthorizationInfo(It.IsAny<HttpContext>())).ReturnsAsync(new AuthorizationInfo
-        {
-            IsAuthenticated = true,
-            User = user,
-            Token = authorizationToken,
-        });
+        authorizationContext.Setup(x => x.GetAuthorizationInfo(It.IsAny<HttpContext>())).ReturnsAsync(
+            new AuthorizationInfo {
+                IsAuthenticated = true,
+                User = user,
+                Token = authorizationToken
+            });
         var userManager = new Mock<IUserManager>();
         userManager.Setup(x => x.GetUserById(user.Id)).Returns(user);
         var libraryManager = new Mock<ILibraryManager>();
@@ -247,8 +239,7 @@ public class PlaybackProgressTrackerTests
     private static ActionExecutingContext CreateActionContext(
         int segmentId = 2,
         long runtimeTicks = 120_000_000,
-        long segmentLengthTicks = 60_000_000)
-    {
+        long segmentLengthTicks = 60_000_000) {
         var httpContext = new DefaultHttpContext();
         httpContext.Request.Method = "GET";
         httpContext.Request.Path = $"/Videos/{ItemId:N}/hls1/main/{segmentId}.ts";
@@ -257,15 +248,15 @@ public class PlaybackProgressTrackerTests
         routeData.Values["controller"] = "DynamicHls";
         routeData.Values["action"] = "GetHlsVideoSegment";
         routeData.Values["itemId"] = ItemId.ToString("N");
-        var actionContext = new ActionContext(httpContext, routeData, new ControllerActionDescriptor(), new ModelStateDictionary());
+        var actionContext = new ActionContext(httpContext, routeData, new ControllerActionDescriptor(),
+            new ModelStateDictionary());
         return new ActionExecutingContext(
             actionContext,
             [],
-            new Dictionary<string, object?>
-            {
+            new Dictionary<string, object?> {
                 ["segmentId"] = segmentId,
                 ["runtimeTicks"] = runtimeTicks,
-                ["actualSegmentLengthTicks"] = segmentLengthTicks,
+                ["actualSegmentLengthTicks"] = segmentLengthTicks
             },
             new object());
     }
