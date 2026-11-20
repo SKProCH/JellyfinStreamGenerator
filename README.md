@@ -60,6 +60,7 @@ Plugin versions use the format `x.y.z.N`. The last digit (`N`) is the preview bu
   - Video/audio/subtitle stream track selection
   - Bitrate selection
   - Subtitle burning method (HLS, Encode, Embed)
+  - Subtitle offset when burning subtitles into video
   - Container selection (fMP4/TS)
   - Copy Timestamps
   - Remember watch progress for your account when you watching something via StreamGenerator links

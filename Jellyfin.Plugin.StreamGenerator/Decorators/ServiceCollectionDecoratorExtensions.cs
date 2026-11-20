@@ -12,9 +12,21 @@ public static class ServiceCollectionDecoratorExtensions
         return services.Decorate(typeof(TService), typeof(TDecorator));
     }
 
+    public static IServiceCollection Decorate<TService, TDecorator, TAlias>(this IServiceCollection services)
+        where TDecorator : TService, TAlias
+    {
+        return Decorate(services, typeof(TService), typeof(TDecorator), typeof(TAlias));
+    }
+
     public static IServiceCollection Decorate(this IServiceCollection services, Type serviceType, Type decoratorType)
+        => Decorate(services, serviceType, decoratorType, null);
+
+    private static IServiceCollection Decorate(IServiceCollection services, Type serviceType, Type decoratorType, Type? aliasType)
     {
         var decorated = false;
+        var aliasDescriptor = aliasType is null
+            ? null
+            : services.LastOrDefault(descriptor => descriptor.ServiceType == serviceType && !IsDecorated(descriptor));
 
         var isOpenGeneric = serviceType.IsGenericTypeDefinition;
 
@@ -41,7 +53,19 @@ public static class ServiceCollectionDecoratorExtensions
             var serviceKey = $"{descriptor.ServiceType.Name}+{Guid.NewGuid():n}{DecoratedServiceKeySuffix}";
 
             services.Add(CreateKeyedDescriptor(descriptor, serviceKey));
-            services[i] = new ServiceDescriptor(descriptor.ServiceType, CreateDecoratorFactory(descriptor.ServiceType, serviceKey, closedDecoratorType), descriptor.Lifetime);
+            var factory = CreateDecoratorFactory(descriptor.ServiceType, serviceKey, closedDecoratorType);
+            if (aliasType is null || !ReferenceEquals(descriptor, aliasDescriptor))
+            {
+                services[i] = new ServiceDescriptor(descriptor.ServiceType, factory, descriptor.Lifetime);
+            }
+            else
+            {
+                var decoratorKey = $"{closedDecoratorType.Name}+{Guid.NewGuid():n}{DecoratedServiceKeySuffix}";
+                services.Add(new ServiceDescriptor(closedDecoratorType, decoratorKey, (provider, _) => factory(provider), descriptor.Lifetime));
+                object ResolveDecorator(IServiceProvider provider) => provider.GetRequiredKeyedService(closedDecoratorType, decoratorKey);
+                services[i] = new ServiceDescriptor(descriptor.ServiceType, ResolveDecorator, descriptor.Lifetime);
+                services.Add(new ServiceDescriptor(aliasType, ResolveDecorator, descriptor.Lifetime));
+            }
 
             decorated = true;
         }
