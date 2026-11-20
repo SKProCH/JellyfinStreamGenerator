@@ -111,7 +111,7 @@ public class AdvancedTranscodeManager(ITranscodeManager inner) : IAdvancedTransc
         => inner.ReportTranscodingProgress(job, state, transcodingPosition, framerate, percentComplete, bytesTranscoded, bitRate);
 
     public Task<TranscodingJob> StartFfMpeg(StreamState state, string outputPath, string commandLineArguments, Guid userId, TranscodingJobType transcodingJobType, CancellationTokenSource cancellationTokenSource, string? workingDirectory = null)
-        => inner.StartFfMpeg(state, outputPath, commandLineArguments, userId, transcodingJobType, cancellationTokenSource, workingDirectory);
+        => inner.StartFfMpeg(state, outputPath, SubtitleOffset.Apply(commandLineArguments, state), userId, transcodingJobType, cancellationTokenSource, workingDirectory);
 
     public void OnTranscodeEndRequest(TranscodingJob job)
         => inner.OnTranscodeEndRequest(job);
